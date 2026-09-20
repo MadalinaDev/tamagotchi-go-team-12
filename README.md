@@ -2,7 +2,7 @@
 
 Lab 0 plans a microservice backend where independently developed pet-care apps share users, creatures, battles, guilds and raids. Each app (a **package**) can define its own care statistics; global services provide interoperability without forcing all packages to use the same hunger/happiness model.
 
-**Status:** architecture and communication-contract proposal for implementation in later labs. The service allocation and technology split below are confirmed; the concrete gameplay constants and API design are the initial baseline for team review. This repository does not yet contain runnable services.
+**Status:** architecture and communication-contract proposal for implementation in later labs. The service allocation and technology split below are confirmed; the concrete gameplay constants and API design are the initial baseline for team review. Sava's Battle and Tamagotchi services are implemented for Lab 1 and runnable via [docker-compose.yml](docker-compose.yml) — see [Lab 1 — Running Sava's services](#lab-1--running-savas-services).
 
 ## Contents
 
@@ -12,6 +12,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Communication contract](#communication-contract)
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
+- [Lab 1 — Running Sava's services](#lab-1--running-savas-services)
 - [Repository setup and Lab 0 checklist](#repository-setup-and-lab-0-checklist)
 
 ## Team and service boundaries
@@ -527,14 +528,39 @@ This section defines the team policy. **Documented rules are not proof that GitH
 
 Private repos admit the professor(s), not teammates, as required by the lab. Peer review of shared contracts happens in this public repo; the private owner applies the agreed contract in their own README. Do not require an unavailable teammate approval in private repo settings.
 
+## Lab 1 — Running Sava's services
+
+Sava's Battle and Tamagotchi services (Go 1.24, PostgreSQL 16) implement the Lab 0 contracts as independently runnable HTTP CRUD services. External dependencies on not-yet-implemented team services run through contract-shaped mocks: Battle uses `MockDependencies` (user existence + loadout validation) and Tamagotchi uses `MockPackageRegistry` (immutable care definition + registration check).
+
+**Public Docker Hub images (public, versioned):**
+
+- [`ekkusuu/battle-service:1.0.0`](https://hub.docker.com/r/ekkusuu/battle-service) — REST on port 8081
+- [`ekkusuu/tamagotchi-service:1.0.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-service) — REST on port 8082
+
+**Requirements:** Docker Desktop (or Docker Engine + Compose v2), ports 8081–8082 free, no Go toolchain needed for the Compose path. Only `.env.example` files are committed; copy to `.env` and set the database passwords — never commit real credentials.
+
+**Run everything (images only, no `build:` directives):**
+
+```sh
+cp .env.example .env   # set BATTLE_DB_PASSWORD and TAMAGOTCHI_DB_PASSWORD
+docker compose up -d
+./scripts/seed.sh      # idempotent: populates empty databases via the public APIs
+```
+
+PostgreSQL runs in Docker with persistent named volumes (`battle-data`, `tamagotchi-data`); data survives `docker compose down` / `up`. Schema migrations run automatically at service startup. Database DDL copies live in [`db/battle`](db/battle) and [`db/tamagotchi`](db/tamagotchi).
+
+**Verify:** Postman collections in [`postman/`](postman/) (`battle-service` and `tamagotchi-service`) cover health, rules/types, full CRUD and a 404 case. Import them, keep the default `base_url` variables (`localhost:8081` / `localhost:8082`) and run top to bottom.
+
+**Unit tests (private repos, all packages ≥ 80%):** Battle — domain 100%, service 94.4%, httpapi 92.3%, store 83.7%. Tamagotchi — domain 100%, service 97.3%, httpapi 92.3%, store 80.8%. The store suites are integration tests and run when `TEST_DATABASE_URL` is set; see `./scripts/run.sh` in each private repo.
+
 ## Repository setup and Lab 0 checklist
 
 The common repository stores shared documentation, collaboration files and Git submodule pointers. Each private service repository stores that service's README and, in later labs, implementation.
 
 | Service path | Repository | Setup state |
 | --- | --- | --- |
-| `services/battle-service` | [Ekkusuu/battle-service](https://github.com/Ekkusuu/battle-service) | Contract README published; linked as submodule |
-| `services/tamagotchi-service` | [Ekkusuu/tamagotchi-service](https://github.com/Ekkusuu/tamagotchi-service) | Contract README published; linked as submodule |
+| `services/battle-service` | [Ekkusuu/battle-service](https://github.com/Ekkusuu/battle-service) | Lab 1 CRUD implementation published; linked as submodule |
+| `services/tamagotchi-service` | [Ekkusuu/tamagotchi-service](https://github.com/Ekkusuu/tamagotchi-service) | Lab 1 CRUD implementation published; linked as submodule |
 | `services/guild-service` | [vikanicologlo/guild-service](https://github.com/vikanicologlo/guild-service) | Contract README published; linked as submodule |
 | `services/notification-service` | [vikanicologlo/notification-service](https://github.com/vikanicologlo/notification-service) | Contract README published; linked as submodule |
 | `services/user-management-service` | [MadalinaDev/user-management-service](https://github.com/MadalinaDev/user-management-service) | URL supplied; contents unverified from this account (private, teammates not invited per lab rules); README + submodule pending owner action |

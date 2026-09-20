@@ -1,0 +1,67 @@
+# Common deployment for the team's Lab 1 services.
+# Every application service MUST reference its public Docker Hub image.
+# Do NOT add `build:` directives here; images are built in the private
+# repositories and pushed to Docker Hub with explicit version tags.
+#
+# Current coverage: Sava's battle-service and tamagotchi-service.
+# Teammates append their services following the same pattern.
+#
+# Usage:
+#   cp .env.example .env   # then set POSTGRES passwords
+#   docker compose up -d
+#   ./scripts/seed.sh
+
+services:
+  battle-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: battle_user
+      POSTGRES_PASSWORD: ${BATTLE_DB_PASSWORD:-battle_pass}
+      POSTGRES_DB: battle_db
+    volumes:
+      - battle-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U battle_user -d battle_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  tamagotchi-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tamagotchi_user
+      POSTGRES_PASSWORD: ${TAMAGOTCHI_DB_PASSWORD:-tama_pass}
+      POSTGRES_DB: tamagotchi_db
+    volumes:
+      - tamagotchi-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tamagotchi_user -d tamagotchi_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  battle-service:
+    image: ekkusuu/battle-service:1.0.0
+    depends_on:
+      battle-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://battle_user:${BATTLE_DB_PASSWORD:-battle_pass}@battle-db:5432/battle_db?sslmode=disable
+      PORT: "8081"
+    ports:
+      - "8081:8081"
+
+  tamagotchi-service:
+    image: ekkusuu/tamagotchi-service:1.0.0
+    depends_on:
+      tamagotchi-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://tamagotchi_user:${TAMAGOTCHI_DB_PASSWORD:-tama_pass}@tamagotchi-db:5432/tamagotchi_db?sslmode=disable
+      PORT: "8082"
+    ports:
+      - "8082:8082"
+
+volumes:
+  battle-data:
+  tamagotchi-data:
