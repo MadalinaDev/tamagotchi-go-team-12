@@ -2,7 +2,7 @@
 
 Lab 0 plans a microservice backend where independently developed pet-care apps share users, creatures, battles, guilds and raids. Each app (a **package**) can define its own care statistics; global services provide interoperability without forcing all packages to use the same hunger/happiness model.
 
-**Status:** architecture and communication-contract proposal for implementation in later labs. The service allocation and technology split below are confirmed; the concrete gameplay constants and API design are the initial baseline for team review. This repository does not yet contain runnable services.
+**Status:** architecture and communication-contract proposal for implementation in later labs. The service allocation and technology split below are confirmed; the concrete gameplay constants and API design are the initial baseline for team review. Sava's Battle and Tamagotchi services are implemented for Lab 1 and runnable via [docker-compose.yml](docker-compose.yml) — see [Lab 1 — Running Sava's services](#lab-1--running-savas-services).
 
 ## Contents
 
@@ -12,6 +12,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Communication contract](#communication-contract)
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
+- [Lab 1 — Running Sava's services](#lab-1--running-savas-services)
 - [Repository setup and Lab 0 checklist](#repository-setup-and-lab-0-checklist)
 
 ## Team and service boundaries
@@ -527,14 +528,40 @@ This section defines the team policy. **Documented rules are not proof that GitH
 
 Private repos admit the professor(s), not teammates, as required by the lab. Peer review of shared contracts happens in this public repo; the private owner applies the agreed contract in their own README. Do not require an unavailable teammate approval in private repo settings.
 
+## Lab 1 — Running Sava's services
+
+Sava's Go services implement the independent **Lab 1 CRUD subset** following the [team Lab 1 conventions](docs/lab-1-conventions.md), with the implemented surface recorded in the [Lab 1 contract addendum](docs/lab-1-contract.md). The Lab 0 combat, JWT, reservations, settlement and messaging sections above remain a target design. `X-Mock-User-Id` selects a simulated caller and does not verify identity; internal routes require `X-Service-Name`. Real integration is not implemented.
+
+**Public Docker Hub images (public, versioned):**
+
+- [`ekkusuu/tamagotchi-battle-service:0.1.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-battle-service) — REST on port 8081
+- [`ekkusuu/tamagotchi-tamagotchi-service:0.1.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-tamagotchi-service) — REST on port 8082
+
+**Requirements:** Docker Desktop (or Docker Engine + Compose v2), ports 8081–8082 free. Go is not required for the Compose path. Copy `.env.example` to `.env` and replace the placeholders with random passwords using letters, digits and underscores only (they are interpolated into SQL by `db/init`). Missing passwords stop Compose instead of silently using committed defaults. Service ports bind to localhost for this mock demo.
+
+**Run everything (images only, no `build:` directives):**
+
+```sh
+cp .env.example .env   # set all nine *_PASSWORD values
+docker compose up -d --wait
+```
+
+A single `postgres` container (PostGIS image) hosts all eight databases with one `pgdata` volume; `db/init/01-create-databases.sh` creates databases, owners and the Map PostGIS extension on first start. Data survives `docker compose down` / `up`; use `down -v` only to wipe everything. Each service applies its versioned migrations (`RUN_MIGRATIONS=true`) and seeds itself (`SEED_ON_START=true`) only when its tables are empty — Alice/Bob starters and one battle from the fixed convention IDs. Reference copies live in [`db/seed/`](db/seed); the mechanism is documented for Madalina's `db/seed.md`.
+
+**Verify:** Postman collections in [`postman/`](postman/) assert every response, including CRUD, pagination, stale versions, duplicate starters after deletion, internal Tamagotchi endpoints, invalid IDs, structured errors and mock authorization. Import `postman/local.postman_environment.json` (fixed seed IDs, per-service base URLs) and run top to bottom. GitHub Actions runs both collections with Newman against published images on every Compose-related PR.
+
+**Tests:** each private repo runs `go test ./...` (unit tests with in-memory stores, mock clients and sqlmock adapter tests, no external services needed). Real PostgreSQL integration tests run only against a disposable database whose name ends in `_test`. Per the updated rubric the 80% coverage gate and the run/test helper scripts were removed; see [audit evidence and remaining team work](docs/lab-1-audit.md).
+
+**Team requirement still pending:** this common Compose file contains Sava's two services on the shared postgres host. The other six owners must contribute their published image tags and runtime settings for the full-team deployment. PR #28 also requires a teammate's review/merge; CI passing alone is not approval.
+
 ## Repository setup and Lab 0 checklist
 
 The common repository stores shared documentation, collaboration files and Git submodule pointers. Each private service repository stores that service's README and, in later labs, implementation.
 
 | Service path | Repository | Setup state |
 | --- | --- | --- |
-| `services/battle-service` | [Ekkusuu/battle-service](https://github.com/Ekkusuu/battle-service) | Contract README published; linked as submodule |
-| `services/tamagotchi-service` | [Ekkusuu/tamagotchi-service](https://github.com/Ekkusuu/tamagotchi-service) | Contract README published; linked as submodule |
+| `services/battle-service` | [Ekkusuu/battle-service](https://github.com/Ekkusuu/battle-service) | Lab 1 CRUD implementation published; linked as submodule |
+| `services/tamagotchi-service` | [Ekkusuu/tamagotchi-service](https://github.com/Ekkusuu/tamagotchi-service) | Lab 1 CRUD implementation published; linked as submodule |
 | `services/guild-service` | [vikanicologlo/guild-service](https://github.com/vikanicologlo/guild-service) | Contract README published; linked as submodule |
 | `services/notification-service` | [vikanicologlo/notification-service](https://github.com/vikanicologlo/notification-service) | Contract README published; linked as submodule |
 | `services/user-management-service` | [MadalinaDev/user-management-service](https://github.com/MadalinaDev/user-management-service) | Contract README published; linked as submodule |

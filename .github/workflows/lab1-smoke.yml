@@ -1,0 +1,31 @@
+name: Lab 1 smoke
+on:
+  pull_request:
+    paths: ['docker-compose.yml', 'db/**', 'postman/**', '.env.example', '.github/workflows/lab1-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci_postgres_${{ github.run_id }}
+      BATTLE_DB_PASSWORD: ci_battle_${{ github.run_id }}
+      TAMAGOTCHI_DB_PASSWORD: ci_tamagotchi_${{ github.run_id }}
+      GUILD_DB_PASSWORD: ci_guild_${{ github.run_id }}
+      NOTIFICATION_DB_PASSWORD: ci_notification_${{ github.run_id }}
+      USER_MANAGEMENT_DB_PASSWORD: ci_users_${{ github.run_id }}
+      MAP_DB_PASSWORD: ci_map_${{ github.run_id }}
+      RAID_DB_PASSWORD: ci_raid_${{ github.run_id }}
+      REGISTRY_DB_PASSWORD: ci_registry_${{ github.run_id }}
+      COMPOSE_PROJECT_NAME: pad-lab1-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: docker compose pull && docker compose up -d --wait
+      - run: npx --yes newman@6.2.1 run postman/battle-service.postman_collection.json --bail
+      - run: npx --yes newman@6.2.1 run postman/tamagotchi-service.postman_collection.json --bail
+      - if: always()
+        run: docker compose logs && docker compose down -v
