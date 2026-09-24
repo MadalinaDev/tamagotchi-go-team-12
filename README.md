@@ -530,30 +530,29 @@ Private repos admit the professor(s), not teammates, as required by the lab. Pee
 
 ## Lab 1 — Running Sava's services
 
-Sava's Go/PostgreSQL services implement the independent **Lab 1 CRUD subset**, with changes recorded in the [implemented contract](docs/lab-1-contract.md). The Lab 0 combat, JWT, reservations, settlement and messaging sections above remain a target design. Runtime mocks fabricate user/pet/package records; `X-User-ID` is a mock identity selector and does not verify identity. Real integration is not implemented.
+Sava's Go services implement the independent **Lab 1 CRUD subset** following the [team Lab 1 conventions](docs/lab-1-conventions.md), with the implemented surface recorded in the [Lab 1 contract addendum](docs/lab-1-contract.md). The Lab 0 combat, JWT, reservations, settlement and messaging sections above remain a target design. `X-Mock-User-Id` selects a simulated caller and does not verify identity; internal routes require `X-Service-Name`. Real integration is not implemented.
 
 **Public Docker Hub images (public, versioned):**
 
-- [`ekkusuu/battle-service:1.0.1`](https://hub.docker.com/r/ekkusuu/battle-service) — REST on port 8081
-- [`ekkusuu/tamagotchi-service:1.0.1`](https://hub.docker.com/r/ekkusuu/tamagotchi-service) — REST on port 8082
+- [`ekkusuu/tamagotchi-battle-service:0.1.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-battle-service) — REST on port 8081
+- [`ekkusuu/tamagotchi-tamagotchi-service:0.1.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-tamagotchi-service) — REST on port 8082
 
-**Requirements:** Docker Desktop (or Docker Engine + Compose v2), ports 8081–8082 free, POSIX shell (Git Bash on Windows). Go is not required for Compose; Node.js/npm and curl are needed only for `scripts/verify.sh`. Seed uses PostgreSQL's container client, not Python. Copy `.env.example` to `.env` and replace the placeholders with random URL-safe passwords (letters/digits are simplest). Missing passwords stop Compose rather than silently using committed defaults. The service URLs are bound to localhost for this mock demo.
+**Requirements:** Docker Desktop (or Docker Engine + Compose v2), ports 8081–8082 free. Go is not required for the Compose path. Copy `.env.example` to `.env` and replace the placeholders with random passwords using letters and digits only (they are interpolated into SQL by `db/init`). Missing passwords stop Compose instead of silently using committed defaults. Service ports bind to localhost for this mock demo.
 
 **Run everything (images only, no `build:` directives):**
 
 ```sh
-cp .env.example .env   # set BATTLE_DB_PASSWORD and TAMAGOTCHI_DB_PASSWORD
-docker compose up -d
-./scripts/seed.sh      # locked transactions seed globally empty domain tables only
+cp .env.example .env   # set all nine *_PASSWORD values
+docker compose up -d --wait
 ```
 
-PostgreSQL uses isolated named volumes (`battle-data`, `tamagotchi-data`); data survives `docker compose down` / `up`. Avoid `down -v` on data you want to keep. Startup embeds each private repo's SQL schema, with matching DDL copies in [`db/battle`](db/battle) and [`db/tamagotchi`](db/tamagotchi). The public seed waits for those schemas, executes with `ON_ERROR_STOP`, locks tables and seeds four deterministic pets and one battle only when empty. A retained starter ledger also prevents deleted starters being silently reseeded. Its exit status reports failures; repeat runs preserve existing records.
+A single `postgres` container (PostGIS image) hosts all eight databases with one `pgdata` volume; `db/init/01-create-databases.sh` creates databases, owners and the Map PostGIS extension on first start. Data survives `docker compose down` / `up`; use `down -v` only to wipe everything. Each service applies its versioned migrations (`RUN_MIGRATIONS=true`) and seeds itself (`SEED_ON_START=true`) only when its tables are empty — Alice/Bob starters and one battle from the fixed convention IDs. Reference copies live in [`db/seed/`](db/seed); the mechanism is documented for Madalina's `db/seed.md`.
 
-**Verify:** Postman collections in [`postman/`](postman/) assert every response, including CRUD, stale versions, duplicate starters after deletion, invalid IDs, structured errors and mock authorization. They generate fresh IDs on each run and do not conflict with seed fixtures. Import and run top to bottom, or run `./scripts/verify.sh` on a disposable Compose project. That script runs Newman and compares database snapshots across repeated seed runs and a full `down`/`up`. GitHub Actions runs the same checks using published images.
+**Verify:** Postman collections in [`postman/`](postman/) assert every response, including CRUD, pagination, stale versions, duplicate starters after deletion, internal Tamagotchi endpoints, invalid IDs, structured errors and mock authorization. Import `postman/local.postman_environment.json` (fixed seed IDs, per-service base URLs) and run top to bottom. GitHub Actions runs both collections with Newman against published images on every Compose-related PR.
 
-**Unit coverage:** `scripts/test.sh` in each private repo enforces at least 80% over all executable `internal/...` code, including SQL adapters with sqlmock, without PostgreSQL. The process-entry wiring and embedded SQL variable are outside the denominator. Real PostgreSQL integration tests run separately using a disposable database whose name ends in `_test`; they must not target the demo database. See [audit evidence and remaining team work](docs/lab-1-audit.md).
+**Tests:** each private repo runs `go test ./...` (unit tests with in-memory stores, mock clients and sqlmock adapter tests, no external services needed). Real PostgreSQL integration tests run only against a disposable database whose name ends in `_test`. Per the updated rubric the 80% coverage gate and the run/test helper scripts were removed; see [audit evidence and remaining team work](docs/lab-1-audit.md).
 
-**Team requirement still pending:** this common Compose file contains Sava's two services. The other six owners must contribute their published image tags and runtime settings for the full-team grade-7 deployment. PR #28 also requires a teammate's review/merge; CI passing alone is not approval.
+**Team requirement still pending:** this common Compose file contains Sava's two services on the shared postgres host. The other six owners must contribute their published image tags and runtime settings for the full-team deployment. PR #28 also requires a teammate's review/merge; CI passing alone is not approval.
 
 ## Repository setup and Lab 0 checklist
 

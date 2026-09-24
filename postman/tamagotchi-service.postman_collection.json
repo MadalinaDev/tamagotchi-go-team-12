@@ -4,40 +4,47 @@
     "name": "Tamagotchi Lab 1 regression suite",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "variable": [{"key":"base_url","value":"http://localhost:8082"}],
+  "variable": [{"key": "base_url", "value": "http://localhost:8082"}],
   "event": [
-    {"listen":"prerequest","script":{"type":"text/javascript","exec":[
-      "if (pm.info.requestName === 'Health') { ['user_id','foreign_id','package_id'].forEach(k => pm.collectionVariables.set(k, pm.variables.replaceIn('{{$guid}}'))); }",
+    {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+      "if (pm.environment.get('tamagotchi_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('tamagotchi_base_url'));",
+      "if (pm.info.requestName === 'Health') { ['user_id','foreign_id'].forEach(k => pm.collectionVariables.set(k, pm.variables.replaceIn('{{$guid}}'))); pm.collectionVariables.set('package_id', pm.environment.get('package_a') || '00000000-0000-4000-8000-0000000000a1'); }",
       "pm.request.headers.upsert({key:'Content-Type',value:'application/json'});",
-      "if (pm.info.requestName !== 'Missing identity') pm.request.headers.upsert({key:'X-User-ID',value:pm.collectionVariables.get(pm.info.requestName === 'Foreign owner' ? 'foreign_id' : 'user_id')});"
+      "if (pm.info.requestName !== 'Missing identity') pm.request.headers.upsert({key:'X-Mock-User-Id',value:pm.collectionVariables.get(pm.info.requestName === 'Foreign owner' ? 'foreign_id' : 'user_id')});",
+      "if (pm.info.requestName.startsWith('Internal') && pm.info.requestName !== 'Internal no service') pm.request.headers.upsert({key:'X-Service-Name',value:'battle'});"
     ]}},
-    {"listen":"test","script":{"type":"text/javascript","exec":[
-      "const expected = {'Health':200,'Types':200,'Create':201,'Duplicate starter':409,'List':200,'Get':200,'Update':200,'Stale update':409,'Foreign owner':403,'Invalid ID':422,'Missing identity':401,'Trailing JSON':400,'Delete':204,'Get deleted':404,'Recreate starter':409};",
+    {"listen": "test", "script": {"type": "text/javascript", "exec": [
+      "const expected = {'Health':200,'Types':200,'Create':201,'Duplicate starter':409,'List':200,'Get':200,'Update':200,'Stale update':409,'Foreign owner':403,'Invalid ID':422,'Missing identity':401,'Trailing JSON':400,'Internal get':200,'Internal care':200,'Internal care incomplete':422,'Internal no service':401,'Delete':204,'Get deleted':404,'Recreate starter':409};",
       "pm.test(pm.info.requestName + ' status', () => pm.response.to.have.status(expected[pm.info.requestName]));",
       "pm.test('Request ID returned', () => pm.expect(pm.response.headers.get('X-Request-ID')).to.match(/^[a-f0-9-]{36}$/));",
-      "if (pm.response.code !== 204) { const b=pm.response.json(); if (pm.info.requestName === 'Create') { pm.collectionVariables.set('pet_id',b.pet_id); pm.test('Pet initialized from mocked definition',()=>{pm.expect(b.level).to.eql(1);pm.expect(b.version).to.eql(1);pm.expect(b.care_stats.hunger).to.eql(20);pm.expect(b.owner_id).to.eql(pm.collectionVariables.get('user_id'));}); }",
+      "if (pm.response.code !== 204) { const b=pm.response.json(); if (pm.info.requestName === 'Create') { pm.collectionVariables.set('pet_id',b.pet_id); pm.test('Pet initialized from mocked definition',()=>{pm.expect(b.level).to.eql(1);pm.expect(b.version).to.eql(1);pm.expect(b.owner_id).to.eql(pm.collectionVariables.get('user_id'));}); }",
       "if(pm.info.requestName === 'Get') pm.test('Read created record',()=>pm.expect(b.pet_id).to.eql(pm.collectionVariables.get('pet_id')));",
       "if(pm.info.requestName === 'List') pm.test('List contains new record',()=>pm.expect(b.items.map(x=>x.pet_id)).to.include(pm.collectionVariables.get('pet_id')));",
       "if(pm.info.requestName === 'Types') pm.test('Six types',()=>pm.expect(b.types.length).to.eql(6));",
       "if(pm.info.requestName === 'Update') pm.test('Rename and version persisted',()=>{pm.expect(b.version).to.eql(2);pm.expect(b.name).to.eql('Blaze');});",
+      "if(pm.info.requestName === 'Internal care') pm.test('Care replaced',()=>pm.expect(b.version).to.eql(3));",
       "if(pm.response.code>=400) pm.test('Structured error',()=>{pm.expect(b.request_id).to.eql(pm.response.headers.get('X-Request-ID'));pm.expect(b.code).to.be.a('string');pm.expect(b.details).to.be.an('array');}); }"
     ]}}
   ],
   "item": [
-    {"name":"Health","request":{"method":"GET","url":"{{base_url}}/health"}},
-    {"name":"Types","request":{"method":"GET","url":"{{base_url}}/api/v1/tamagotchi-types"}},
-    {"name":"Create","request":{"method":"POST","url":"{{base_url}}/api/v1/tamagotchis","body":{"mode":"raw","raw":"{\"package_id\":\"{{package_id}}\",\"name\":\"Ember\",\"type\":\"flame\"}"}}},
-    {"name":"Duplicate starter","request":{"method":"POST","url":"{{base_url}}/api/v1/tamagotchis","body":{"mode":"raw","raw":"{\"package_id\":\"{{package_id}}\",\"name\":\"Ember\",\"type\":\"flame\"}"}}},
-    {"name":"List","request":{"method":"GET","url":"{{base_url}}/api/v1/tamagotchis"}},
-    {"name":"Get","request":{"method":"GET","url":"{{base_url}}/api/v1/tamagotchis/{{pet_id}}"}},
-    {"name":"Update","request":{"method":"PATCH","url":"{{base_url}}/api/v1/tamagotchis/{{pet_id}}","body":{"mode":"raw","raw":"{\"name\":\"Blaze\",\"expected_version\":1}"}}},
-    {"name":"Stale update","request":{"method":"PATCH","url":"{{base_url}}/api/v1/tamagotchis/{{pet_id}}","body":{"mode":"raw","raw":"{\"name\":\"Blaze\",\"expected_version\":1}"}}},
-    {"name":"Foreign owner","request":{"method":"GET","url":"{{base_url}}/api/v1/tamagotchis/{{pet_id}}"}},
-    {"name":"Invalid ID","request":{"method":"GET","url":"{{base_url}}/api/v1/tamagotchis/not-a-uuid"}},
-    {"name":"Missing identity","request":{"method":"GET","url":"{{base_url}}/api/v1/tamagotchis"}},
-    {"name":"Trailing JSON","request":{"method":"POST","url":"{{base_url}}/api/v1/tamagotchis","body":{"mode":"raw","raw":"{} {}"}}},
-    {"name":"Delete","request":{"method":"DELETE","url":"{{base_url}}/api/v1/tamagotchis/{{pet_id}}"}},
-    {"name":"Get deleted","request":{"method":"GET","url":"{{base_url}}/api/v1/tamagotchis/{{pet_id}}"}},
-    {"name":"Recreate starter","request":{"method":"POST","url":"{{base_url}}/api/v1/tamagotchis","body":{"mode":"raw","raw":"{\"package_id\":\"{{package_id}}\",\"name\":\"Replacement\",\"type\":\"flame\"}"}}}
+    {"name": "Health", "request": {"method": "GET", "url": "{{base_url}}/health"}},
+    {"name": "Types", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchi-types"}},
+    {"name": "Create", "request": {"method": "POST", "url": "{{base_url}}/api/v1/tamagotchis", "body": {"mode": "raw", "raw": "{\"package_id\":\"{{package_id}}\",\"name\":\"Ember\",\"type\":\"flame\"}"}}},
+    {"name": "Duplicate starter", "request": {"method": "POST", "url": "{{base_url}}/api/v1/tamagotchis", "body": {"mode": "raw", "raw": "{\"package_id\":\"{{package_id}}\",\"name\":\"Ember\",\"type\":\"flame\"}"}}},
+    {"name": "List", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchis"}},
+    {"name": "Get", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchis/{{pet_id}}"}},
+    {"name": "Update", "request": {"method": "PATCH", "url": "{{base_url}}/api/v1/tamagotchis/{{pet_id}}", "body": {"mode": "raw", "raw": "{\"name\":\"Blaze\",\"expected_version\":1}"}}},
+    {"name": "Stale update", "request": {"method": "PATCH", "url": "{{base_url}}/api/v1/tamagotchis/{{pet_id}}", "body": {"mode": "raw", "raw": "{\"name\":\"Blaze\",\"expected_version\":1}"}}},
+    {"name": "Foreign owner", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchis/{{pet_id}}"}},
+    {"name": "Invalid ID", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchis/not-a-uuid"}},
+    {"name": "Missing identity", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchis"}},
+    {"name": "Trailing JSON", "request": {"method": "POST", "url": "{{base_url}}/api/v1/tamagotchis", "body": {"mode": "raw", "raw": "{} {}"}}},
+    {"name": "Internal get", "request": {"method": "GET", "url": "{{base_url}}/internal/v1/tamagotchis/{{pet_id}}"}},
+    {"name": "Internal care", "request": {"method": "PUT", "url": "{{base_url}}/internal/v1/tamagotchis/{{pet_id}}/care-stats", "body": {"mode": "raw", "raw": "{\"care_stats\":{\"hunger\":5,\"happiness\":95},\"expected_version\":2}"}}},
+    {"name": "Internal care incomplete", "request": {"method": "PUT", "url": "{{base_url}}/internal/v1/tamagotchis/{{pet_id}}/care-stats", "body": {"mode": "raw", "raw": "{\"care_stats\":{\"hunger\":5},\"expected_version\":3}"}}},
+    {"name": "Internal no service", "request": {"method": "GET", "url": "{{base_url}}/internal/v1/tamagotchis/{{pet_id}}"}},
+    {"name": "Delete", "request": {"method": "DELETE", "url": "{{base_url}}/api/v1/tamagotchis/{{pet_id}}"}},
+    {"name": "Get deleted", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchis/{{pet_id}}"}},
+    {"name": "Recreate starter", "request": {"method": "POST", "url": "{{base_url}}/api/v1/tamagotchis", "body": {"mode": "raw", "raw": "{\"package_id\":\"{{package_id}}\",\"name\":\"Replacement\",\"type\":\"flame\"}"}}}
   ]
 }

@@ -7,63 +7,74 @@
 # Teammates append their services following the same pattern.
 #
 # Usage:
-#   cp .env.example .env   # then set POSTGRES passwords
-#   docker compose up -d
-#   ./scripts/seed.sh
+#   cp .env.example .env   # then set the eight *_DB_PASSWORD values
+#   docker compose up -d --wait
+# Each service seeds itself on startup when SEED_ON_START=true.
 
 services:
-  battle-db:
-    image: postgres:16-alpine
+  postgres:
+    image: postgis/postgis:16-3.4
     environment:
-      POSTGRES_USER: battle_user
-      POSTGRES_PASSWORD: ${BATTLE_DB_PASSWORD:?Set BATTLE_DB_PASSWORD in .env}
-      POSTGRES_DB: battle_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      BATTLE_DB_PASSWORD: ${BATTLE_DB_PASSWORD:?Set BATTLE_DB_PASSWORD in .env}
+      TAMAGOTCHI_DB_PASSWORD: ${TAMAGOTCHI_DB_PASSWORD:?Set TAMAGOTCHI_DB_PASSWORD in .env}
+      GUILD_DB_PASSWORD: ${GUILD_DB_PASSWORD:?Set GUILD_DB_PASSWORD in .env}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Set NOTIFICATION_DB_PASSWORD in .env}
+      USER_MANAGEMENT_DB_PASSWORD: ${USER_MANAGEMENT_DB_PASSWORD:?Set USER_MANAGEMENT_DB_PASSWORD in .env}
+      MAP_DB_PASSWORD: ${MAP_DB_PASSWORD:?Set MAP_DB_PASSWORD in .env}
+      RAID_DB_PASSWORD: ${RAID_DB_PASSWORD:?Set RAID_DB_PASSWORD in .env}
+      REGISTRY_DB_PASSWORD: ${REGISTRY_DB_PASSWORD:?Set REGISTRY_DB_PASSWORD in .env}
     volumes:
-      - battle-data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U battle_user -d battle_db"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  tamagotchi-db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: tamagotchi_user
-      POSTGRES_PASSWORD: ${TAMAGOTCHI_DB_PASSWORD:?Set TAMAGOTCHI_DB_PASSWORD in .env}
-      POSTGRES_DB: tamagotchi_db
-    volumes:
-      - tamagotchi-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tamagotchi_user -d tamagotchi_db"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   battle-service:
-    image: ekkusuu/battle-service:1.0.1
+    image: ekkusuu/tamagotchi-battle-service:0.1.0
     depends_on:
-      battle-db:
+      postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://battle_user:${BATTLE_DB_PASSWORD:?Set BATTLE_DB_PASSWORD in .env}@battle-db:5432/battle_db?sslmode=disable
-      DEPENDENCY_MODE: mock
       PORT: "8081"
+      STORAGE: postgres
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: battle_db
+      DB_USER: battle_user
+      DB_PASSWORD: ${BATTLE_DB_PASSWORD:?Set BATTLE_DB_PASSWORD in .env}
+      DB_SSLMODE: disable
+      RUN_MIGRATIONS: "true"
+      USE_MOCKS: "true"
+      AUTH_MODE: mock
+      SEED_ON_START: "true"
     ports:
       - "127.0.0.1:8081:8081"
 
   tamagotchi-service:
-    image: ekkusuu/tamagotchi-service:1.0.1
+    image: ekkusuu/tamagotchi-tamagotchi-service:0.1.0
     depends_on:
-      tamagotchi-db:
+      postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://tamagotchi_user:${TAMAGOTCHI_DB_PASSWORD:?Set TAMAGOTCHI_DB_PASSWORD in .env}@tamagotchi-db:5432/tamagotchi_db?sslmode=disable
-      DEPENDENCY_MODE: mock
       PORT: "8082"
+      STORAGE: postgres
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: tamagotchi_db
+      DB_USER: tamagotchi_user
+      DB_PASSWORD: ${TAMAGOTCHI_DB_PASSWORD:?Set TAMAGOTCHI_DB_PASSWORD in .env}
+      DB_SSLMODE: disable
+      RUN_MIGRATIONS: "true"
+      USE_MOCKS: "true"
+      AUTH_MODE: mock
+      SEED_ON_START: "true"
     ports:
       - "127.0.0.1:8082:8082"
 
 volumes:
-  battle-data:
-  tamagotchi-data:
+  pgdata:

@@ -4,14 +4,15 @@
     "name": "Battle Lab 1 regression suite",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "variable": [{"key":"base_url","value":"http://localhost:8081"}],
+  "variable": [{"key": "base_url", "value": "http://localhost:8081"}],
   "event": [
-    {"listen":"prerequest","script":{"type":"text/javascript","exec":[
+    {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+      "if (pm.environment.get('battle_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('battle_base_url'));",
       "if (pm.info.requestName === 'Health') { ['user_id','opponent_id','primary_pet_id','secondary_pet_id'].forEach(k => pm.collectionVariables.set(k, pm.variables.replaceIn('{{$guid}}'))); }",
       "pm.request.headers.upsert({key:'Content-Type',value:'application/json'});",
-      "if (pm.info.requestName !== 'Missing identity') pm.request.headers.upsert({key:'X-User-ID',value:pm.collectionVariables.get(pm.info.requestName === 'Foreign owner' ? 'primary_pet_id' : 'user_id')});"
+      "if (pm.info.requestName !== 'Missing identity') pm.request.headers.upsert({key:'X-Mock-User-Id',value:pm.collectionVariables.get(pm.info.requestName === 'Foreign owner' ? 'primary_pet_id' : 'user_id')});"
     ]}},
-    {"listen":"test","script":{"type":"text/javascript","exec":[
+    {"listen": "test", "script": {"type": "text/javascript", "exec": [
       "const expected = {'Health':200,'Rules':200,'Create':201,'List':200,'Get':200,'Update':200,'Stale update':409,'Foreign owner':403,'Invalid ID':422,'Missing identity':401,'Trailing JSON':400,'Delete':204,'Get deleted':404};",
       "pm.test(pm.info.requestName + ' status', () => pm.response.to.have.status(expected[pm.info.requestName]));",
       "pm.test('Request ID returned', () => pm.expect(pm.response.headers.get('X-Request-ID')).to.match(/^[a-f0-9-]{36}$/));",
@@ -23,18 +24,18 @@
     ]}}
   ],
   "item": [
-    {"name":"Health","request":{"method":"GET","url":"{{base_url}}/health"}},
-    {"name":"Rules","request":{"method":"GET","url":"{{base_url}}/api/v1/battle-rules"}},
-    {"name":"Create","request":{"method":"POST","url":"{{base_url}}/api/v1/battles","body":{"mode":"raw","raw":"{\"opponent_id\":\"{{opponent_id}}\",\"loadout\":{\"primary_pet_id\":\"{{primary_pet_id}}\",\"secondary_pet_id\":\"{{secondary_pet_id}}\",\"boost\":\"power\"}}"}}},
-    {"name":"List","request":{"method":"GET","url":"{{base_url}}/api/v1/battles"}},
-    {"name":"Get","request":{"method":"GET","url":"{{base_url}}/api/v1/battles/{{battle_id}}"}},
-    {"name":"Update","request":{"method":"PATCH","url":"{{base_url}}/api/v1/battles/{{battle_id}}","body":{"mode":"raw","raw":"{\"loadout\":{\"primary_pet_id\":\"{{primary_pet_id}}\",\"secondary_pet_id\":\"{{secondary_pet_id}}\",\"boost\":\"guard\"},\"expected_version\":1}"}}},
-    {"name":"Stale update","request":{"method":"PATCH","url":"{{base_url}}/api/v1/battles/{{battle_id}}","body":{"mode":"raw","raw":"{\"loadout\":{\"primary_pet_id\":\"{{primary_pet_id}}\",\"secondary_pet_id\":\"{{secondary_pet_id}}\",\"boost\":\"guard\"},\"expected_version\":1}"}}},
-    {"name":"Foreign owner","request":{"method":"GET","url":"{{base_url}}/api/v1/battles/{{battle_id}}"}},
-    {"name":"Invalid ID","request":{"method":"GET","url":"{{base_url}}/api/v1/battles/not-a-uuid"}},
-    {"name":"Missing identity","request":{"method":"GET","url":"{{base_url}}/api/v1/battles"}},
-    {"name":"Trailing JSON","request":{"method":"POST","url":"{{base_url}}/api/v1/battles","body":{"mode":"raw","raw":"{} {}"}}},
-    {"name":"Delete","request":{"method":"DELETE","url":"{{base_url}}/api/v1/battles/{{battle_id}}"}},
-    {"name":"Get deleted","request":{"method":"GET","url":"{{base_url}}/api/v1/battles/{{battle_id}}"}}
+    {"name": "Health", "request": {"method": "GET", "url": "{{base_url}}/health"}},
+    {"name": "Rules", "request": {"method": "GET", "url": "{{base_url}}/api/v1/battle-rules"}},
+    {"name": "Create", "request": {"method": "POST", "url": "{{base_url}}/api/v1/battles", "body": {"mode": "raw", "raw": "{\"opponent_id\":\"{{opponent_id}}\",\"loadout\":{\"primary_pet_id\":\"{{primary_pet_id}}\",\"secondary_pet_id\":\"{{secondary_pet_id}}\",\"boost\":\"power\"}}"}}},
+    {"name": "List", "request": {"method": "GET", "url": "{{base_url}}/api/v1/battles"}},
+    {"name": "Get", "request": {"method": "GET", "url": "{{base_url}}/api/v1/battles/{{battle_id}}"}},
+    {"name": "Update", "request": {"method": "PATCH", "url": "{{base_url}}/api/v1/battles/{{battle_id}}", "body": {"mode": "raw", "raw": "{\"loadout\":{\"primary_pet_id\":\"{{primary_pet_id}}\",\"secondary_pet_id\":\"{{secondary_pet_id}}\",\"boost\":\"guard\"},\"expected_version\":1}"}}},
+    {"name": "Stale update", "request": {"method": "PATCH", "url": "{{base_url}}/api/v1/battles/{{battle_id}}", "body": {"mode": "raw", "raw": "{\"loadout\":{\"primary_pet_id\":\"{{primary_pet_id}}\",\"secondary_pet_id\":\"{{secondary_pet_id}}\",\"boost\":\"guard\"},\"expected_version\":1}"}}},
+    {"name": "Foreign owner", "request": {"method": "GET", "url": "{{base_url}}/api/v1/battles/{{battle_id}}"}},
+    {"name": "Invalid ID", "request": {"method": "GET", "url": "{{base_url}}/api/v1/battles/not-a-uuid"}},
+    {"name": "Missing identity", "request": {"method": "GET", "url": "{{base_url}}/api/v1/battles"}},
+    {"name": "Trailing JSON", "request": {"method": "POST", "url": "{{base_url}}/api/v1/battles", "body": {"mode": "raw", "raw": "{} {}"}}},
+    {"name": "Delete", "request": {"method": "DELETE", "url": "{{base_url}}/api/v1/battles/{{battle_id}}"}},
+    {"name": "Get deleted", "request": {"method": "GET", "url": "{{base_url}}/api/v1/battles/{{battle_id}}"}}
   ]
 }
