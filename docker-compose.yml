@@ -10,6 +10,9 @@
 # Postgres runs the scripts in ./db/init only on an empty volume. To start
 # from scratch (drops all data): docker compose down -v
 #
+# TODO(Madalina, Sabina): replace *-dockerhub-username with your Docker Hub
+# username once your images are pushed.
+#
 # Ports, image names and database names follow docs/lab-1-conventions
 # (sections 2-4 and 10).
 
@@ -84,7 +87,7 @@ services:
 
   guild-service:
     <<: *service
-    image: VICA_DOCKERHUB/tamagotchi-guild-service:0.1.0
+    image: nikvnln/tamagotchi-guild-service:0.1.0
     environment:
       <<: *service-env
       PORT: "8083"
@@ -96,7 +99,7 @@ services:
 
   notification-service:
     <<: *service
-    image: VICA_DOCKERHUB/tamagotchi-notification-service:0.1.0
+    image: nikvnln/tamagotchi-notification-service:0.1.0
     environment:
       <<: *service-env
       PORT: "8084"
@@ -108,7 +111,7 @@ services:
 
   user-management-service:
     <<: *service
-    image: MADALINA_DOCKERHUB/tamagotchi-user-management-service:0.1.0
+    image: madalina-dockerhub-username/tamagotchi-user-management-service:0.1.0
     environment:
       <<: *service-env
       PORT: "8085"
@@ -120,7 +123,7 @@ services:
 
   map-service:
     <<: *service
-    image: MADALINA_DOCKERHUB/tamagotchi-map-service:0.1.0
+    image: madalina-dockerhub-username/tamagotchi-map-service:0.1.0
     environment:
       <<: *service-env
       PORT: "8086"
@@ -132,7 +135,7 @@ services:
 
   monster-raid-service:
     <<: *service
-    image: SABINA_DOCKERHUB/tamagotchi-monster-raid-service:0.1.0
+    image: sabina-dockerhub-username/tamagotchi-monster-raid-service:0.1.0
     environment:
       <<: *service-env
       PORT: "8087"
@@ -144,7 +147,7 @@ services:
 
   package-registry-service:
     <<: *service
-    image: SABINA_DOCKERHUB/tamagotchi-package-registry-service:0.1.0
+    image: sabina-dockerhub-username/tamagotchi-package-registry-service:0.1.0
     environment:
       <<: *service-env
       PORT: "8088"
