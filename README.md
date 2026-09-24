@@ -537,7 +537,7 @@ Sava's Go services implement the independent **Lab 1 CRUD subset** following the
 - [`ekkusuu/tamagotchi-battle-service:0.1.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-battle-service) — REST on port 8081
 - [`ekkusuu/tamagotchi-tamagotchi-service:0.1.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-tamagotchi-service) — REST on port 8082
 
-**Requirements:** Docker Desktop (or Docker Engine + Compose v2), ports 8081–8082 free. Go is not required for the Compose path. Copy `.env.example` to `.env` and replace the placeholders with random passwords using letters and digits only (they are interpolated into SQL by `db/init`). Missing passwords stop Compose instead of silently using committed defaults. Service ports bind to localhost for this mock demo.
+**Requirements:** Docker Desktop (or Docker Engine + Compose v2), ports 8081–8082 free. Go is not required for the Compose path. Copy `.env.example` to `.env` and replace the placeholders with random passwords using letters, digits and underscores only (they are interpolated into SQL by `db/init`). Missing passwords stop Compose instead of silently using committed defaults. Service ports bind to localhost for this mock demo.
 
 **Run everything (images only, no `build:` directives):**
 

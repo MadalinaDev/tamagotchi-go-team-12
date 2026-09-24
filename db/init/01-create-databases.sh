@@ -5,7 +5,8 @@
 #   BATTLE_DB_PASSWORD, TAMAGOTCHI_DB_PASSWORD, GUILD_DB_PASSWORD,
 #   NOTIFICATION_DB_PASSWORD, USER_MANAGEMENT_DB_PASSWORD, MAP_DB_PASSWORD,
 #   RAID_DB_PASSWORD, REGISTRY_DB_PASSWORD
-# Passwords must be letters and digits only (they are interpolated into SQL).
+# Passwords may contain letters, digits and underscores only: they are
+# interpolated into SQL string literals and connection URLs.
 # To redo: docker compose down -v (destroys all data).
 set -eu
 
@@ -20,8 +21,8 @@ create_role() {
     exit 1
   fi
   case "$password" in
-    *[^a-zA-Z0-9]*)
-      echo "Password in $password_var must be letters and digits only" >&2
+    *[^a-zA-Z0-9_]*)
+      echo "Password in $password_var must be letters, digits or underscores only" >&2
       exit 1
       ;;
   esac
