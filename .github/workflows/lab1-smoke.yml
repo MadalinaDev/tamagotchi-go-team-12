@@ -1,0 +1,23 @@
+name: Lab 1 smoke
+on:
+  pull_request:
+    paths: ['docker-compose.yml', 'db/**', 'scripts/**', 'postman/**', '.github/workflows/lab1-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      BATTLE_DB_PASSWORD: ci_battle_${{ github.run_id }}
+      TAMAGOTCHI_DB_PASSWORD: ci_tamagotchi_${{ github.run_id }}
+      COMPOSE_PROJECT_NAME: pad-lab1-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: docker compose pull && docker compose up -d --wait
+      - run: ./scripts/verify.sh
+      - if: always()
+        run: docker compose logs && docker compose down -v

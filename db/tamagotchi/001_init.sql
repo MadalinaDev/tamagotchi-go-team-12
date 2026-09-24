@@ -16,3 +16,12 @@ CREATE TABLE IF NOT EXISTS tamagotchis (
 );
 
 CREATE INDEX IF NOT EXISTS tamagotchis_owner_idx ON tamagotchis (owner_id, created_at, pet_id);
+
+-- Issuance survives pet deletion: deleting a starter cannot farm new starters.
+CREATE TABLE IF NOT EXISTS starter_issuances (
+    owner_id UUID NOT NULL,
+    package_id UUID NOT NULL,
+    PRIMARY KEY(owner_id, package_id)
+);
+INSERT INTO starter_issuances(owner_id, package_id)
+SELECT owner_id, package_id FROM tamagotchis ON CONFLICT DO NOTHING;

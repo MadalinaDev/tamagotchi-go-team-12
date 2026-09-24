@@ -530,28 +530,30 @@ Private repos admit the professor(s), not teammates, as required by the lab. Pee
 
 ## Lab 1 — Running Sava's services
 
-Sava's Battle and Tamagotchi services (Go 1.24, PostgreSQL 16) implement the Lab 0 contracts as independently runnable HTTP CRUD services. External dependencies on not-yet-implemented team services run through contract-shaped mocks: Battle uses `MockDependencies` (user existence + loadout validation) and Tamagotchi uses `MockPackageRegistry` (immutable care definition + registration check).
+Sava's Go/PostgreSQL services implement the independent **Lab 1 CRUD subset**, with changes recorded in the [implemented contract](docs/lab-1-contract.md). The Lab 0 combat, JWT, reservations, settlement and messaging sections above remain a target design. Runtime mocks fabricate user/pet/package records; `X-User-ID` is a mock identity selector and does not verify identity. Real integration is not implemented.
 
 **Public Docker Hub images (public, versioned):**
 
-- [`ekkusuu/battle-service:1.0.0`](https://hub.docker.com/r/ekkusuu/battle-service) — REST on port 8081
-- [`ekkusuu/tamagotchi-service:1.0.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-service) — REST on port 8082
+- [`ekkusuu/battle-service:1.0.1`](https://hub.docker.com/r/ekkusuu/battle-service) — REST on port 8081
+- [`ekkusuu/tamagotchi-service:1.0.1`](https://hub.docker.com/r/ekkusuu/tamagotchi-service) — REST on port 8082
 
-**Requirements:** Docker Desktop (or Docker Engine + Compose v2), ports 8081–8082 free, no Go toolchain needed for the Compose path. Only `.env.example` files are committed; copy to `.env` and set the database passwords — never commit real credentials.
+**Requirements:** Docker Desktop (or Docker Engine + Compose v2), ports 8081–8082 free, POSIX shell (Git Bash on Windows). Go is not required for Compose; Node.js/npm and curl are needed only for `scripts/verify.sh`. Seed uses PostgreSQL's container client, not Python. Copy `.env.example` to `.env` and replace the placeholders with random URL-safe passwords (letters/digits are simplest). Missing passwords stop Compose rather than silently using committed defaults. The service URLs are bound to localhost for this mock demo.
 
 **Run everything (images only, no `build:` directives):**
 
 ```sh
 cp .env.example .env   # set BATTLE_DB_PASSWORD and TAMAGOTCHI_DB_PASSWORD
 docker compose up -d
-./scripts/seed.sh      # idempotent: populates empty databases via the public APIs
+./scripts/seed.sh      # locked transactions seed globally empty domain tables only
 ```
 
-PostgreSQL runs in Docker with persistent named volumes (`battle-data`, `tamagotchi-data`); data survives `docker compose down` / `up`. Schema migrations run automatically at service startup. Database DDL copies live in [`db/battle`](db/battle) and [`db/tamagotchi`](db/tamagotchi).
+PostgreSQL uses isolated named volumes (`battle-data`, `tamagotchi-data`); data survives `docker compose down` / `up`. Avoid `down -v` on data you want to keep. Startup embeds each private repo's SQL schema, with matching DDL copies in [`db/battle`](db/battle) and [`db/tamagotchi`](db/tamagotchi). The public seed waits for those schemas, executes with `ON_ERROR_STOP`, locks tables and seeds four deterministic pets and one battle only when empty. A retained starter ledger also prevents deleted starters being silently reseeded. Its exit status reports failures; repeat runs preserve existing records.
 
-**Verify:** Postman collections in [`postman/`](postman/) (`battle-service` and `tamagotchi-service`) cover health, rules/types, full CRUD and a 404 case. Import them, keep the default `base_url` variables (`localhost:8081` / `localhost:8082`) and run top to bottom.
+**Verify:** Postman collections in [`postman/`](postman/) assert every response, including CRUD, stale versions, duplicate starters after deletion, invalid IDs, structured errors and mock authorization. They generate fresh IDs on each run and do not conflict with seed fixtures. Import and run top to bottom, or run `./scripts/verify.sh` on a disposable Compose project. That script runs Newman and compares database snapshots across repeated seed runs and a full `down`/`up`. GitHub Actions runs the same checks using published images.
 
-**Unit tests (private repos, all packages ≥ 80%):** Battle — domain 100%, service 94.4%, httpapi 92.3%, store 83.7%. Tamagotchi — domain 100%, service 97.3%, httpapi 92.3%, store 80.8%. The store suites are integration tests and run when `TEST_DATABASE_URL` is set; see `./scripts/run.sh` in each private repo.
+**Unit coverage:** `scripts/test.sh` in each private repo enforces at least 80% over all executable `internal/...` code, including SQL adapters with sqlmock, without PostgreSQL. The process-entry wiring and embedded SQL variable are outside the denominator. Real PostgreSQL integration tests run separately using a disposable database whose name ends in `_test`; they must not target the demo database. See [audit evidence and remaining team work](docs/lab-1-audit.md).
+
+**Team requirement still pending:** this common Compose file contains Sava's two services. The other six owners must contribute their published image tags and runtime settings for the full-team grade-7 deployment. PR #28 also requires a teammate's review/merge; CI passing alone is not approval.
 
 ## Repository setup and Lab 0 checklist
 
