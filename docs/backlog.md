@@ -11,7 +11,7 @@ The remaining work is also published as [repository issues #1–12](https://gith
 | Lab 0 | Create/link Project and assign tasks | Mădălina / Project owner | Board is accessible to team, linked to repository and populated with tasks |
 | Lab 0 | Publish Battle and Tamagotchi READMEs and submodules | Sava | Relevant contracts copied; pointers resolve to pushed private commits |
 | Lab 0 | Publish Guild and Notification READMEs and submodules | Vica | Supply both URLs, copy relevant contracts and link commits |
-| Lab 0 | Publish User Management and Map READMEs and submodules | Mădălina | Supply both URLs, copy relevant contracts and link commits |
+| Lab 0 | Publish User Management and Map READMEs and submodules | Mădălina | Relevant contracts copied; pointers resolve to pushed private commits |
 | Lab 0 | Publish Monster Raid and Package Registry READMEs and submodules | Sabina | Supply both URLs, copy relevant contracts and link commits |
 | Lab 0 | Complete professor invitations, Excel and presentation signup | All four | Professor access verified, repository/team data entered, presentation slot reserved |
 | Next lab planning | Scaffold Battle and Tamagotchi services | Sava | Go projects, isolated PostgreSQL databases, validated DTOs and documented local launch |

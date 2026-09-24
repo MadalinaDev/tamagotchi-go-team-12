@@ -1,0 +1,535 @@
+{
+  "info": {
+    "name": "notification-service",
+    "description": "Notification service (Vica), Lab 1. Run the whole collection in order. Without RabbitMQ, events are injected through the temporary route POST /internal/v1/dev/events (Lab 1 deviation). Auth is mocked with X-Mock-User-Id; internal routes need X-Service-Name. Guild and Firebase are mocked: guild {{founders_guild_id}} has Alice, Bob and Carol; pushes are only logged.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Devices",
+      "item": [
+        {
+          "name": "Register device (Alice)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/notification-devices",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notification-devices"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firebase_token\": \"demo-token-alice-{{$timestamp}}\",\n  \"platform\": \"web\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"device_id\", pm.response.json().device_id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Preferences",
+      "item": [
+        {
+          "name": "Get preferences",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/notification-preferences",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notification-preferences"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Put preferences",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/notification-preferences",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notification-preferences"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"push_enabled\": true,\n  \"disabled_types\": [\n    \"UsersNearby\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Dev events (Lab 1 only)",
+      "item": [
+        {
+          "name": "Dev event: GuildInvited -> Alice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Name",
+                "value": "dev"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/internal/v1/dev/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "internal",
+                "v1",
+                "dev",
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"{{event_id}}\",\n  \"type\": \"GuildInvited\",\n  \"version\": 1,\n  \"producer\": \"guild\",\n  \"occurred_at\": \"2026-09-24T12:00:00Z\",\n  \"correlation_id\": \"{{$guid}}\",\n  \"payload\": {\n    \"invite_id\": \"{{$guid}}\",\n    \"guild_id\": \"{{founders_guild_id}}\",\n    \"inviter_id\": \"{{bob_id}}\",\n    \"invitee_id\": \"{{user_id}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"event_id\", pm.variables.replaceIn(\"{{$guid}}\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dev event: same event again (deduplicated)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Name",
+                "value": "dev"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/internal/v1/dev/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "internal",
+                "v1",
+                "dev",
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"{{event_id}}\",\n  \"type\": \"GuildInvited\",\n  \"version\": 1,\n  \"producer\": \"guild\",\n  \"occurred_at\": \"2026-09-24T12:00:00Z\",\n  \"correlation_id\": \"{{$guid}}\",\n  \"payload\": {\n    \"invite_id\": \"{{$guid}}\",\n    \"guild_id\": \"{{founders_guild_id}}\",\n    \"inviter_id\": \"{{bob_id}}\",\n    \"invitee_id\": \"{{user_id}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dev event: RaidStarted -> all Founders members",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Service-Name",
+                "value": "dev"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/internal/v1/dev/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "internal",
+                "v1",
+                "dev",
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"{{$guid}}\",\n  \"type\": \"RaidStarted\",\n  \"version\": 1,\n  \"producer\": \"monster-raid\",\n  \"occurred_at\": \"2026-09-24T12:00:00Z\",\n  \"correlation_id\": \"00000000-0000-4000-8000-0000000000e1\",\n  \"payload\": {\n    \"raid_id\": \"00000000-0000-4000-8000-0000000000e1\",\n    \"guild_id\": \"{{founders_guild_id}}\",\n    \"ends_at\": \"2026-09-24T13:00:00Z\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Inbox",
+      "item": [
+        {
+          "name": "List notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/notifications?limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"notification_id\", pm.response.json().items[0].notification_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List unread notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/notifications?unread=true",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "unread",
+                  "value": "true"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark notification read",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/notifications/{{notification_id}}/read",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications",
+                "{{notification_id}}",
+                "read"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "item": [
+        {
+          "name": "Delete device",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/notification-devices/{{device_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notification-devices",
+                "{{device_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8084"
+    },
+    {
+      "key": "user_id",
+      "value": "00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "key": "admin_id",
+      "value": "00000000-0000-4000-8000-000000000009"
+    },
+    {
+      "key": "bob_id",
+      "value": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "key": "carol_id",
+      "value": "00000000-0000-4000-8000-000000000003"
+    },
+    {
+      "key": "founders_guild_id",
+      "value": "00000000-0000-4000-8000-0000000000c1"
+    },
+    {
+      "key": "device_id",
+      "value": ""
+    },
+    {
+      "key": "notification_id",
+      "value": ""
+    },
+    {
+      "key": "event_id",
+      "value": ""
+    }
+  ]
+}

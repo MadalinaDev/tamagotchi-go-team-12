@@ -1,80 +1,17 @@
-# Common deployment for the team's Lab 1 services.
-# Every application service MUST reference its public Docker Hub image.
-# Do NOT add `build:` directives here; images are built in the private
-# repositories and pushed to Docker Hub with explicit version tags.
-#
-# Current coverage: Sava's battle-service and tamagotchi-service.
-# Teammates append their services following the same pattern.
-#
-# Usage:
-#   cp .env.example .env   # then set the eight *_DB_PASSWORD values
-#   docker compose up -d --wait
-# Each service seeds itself on startup when SEED_ON_START=true.
+# Copy to .env and replace every value. Never commit .env.
+# Use letters, digits and underscores only (NestJS services put them into a URL).
 
-services:
-  postgres:
-    image: postgis/postgis:16-3.4
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      BATTLE_DB_PASSWORD: ${BATTLE_DB_PASSWORD:?Set BATTLE_DB_PASSWORD in .env}
-      TAMAGOTCHI_DB_PASSWORD: ${TAMAGOTCHI_DB_PASSWORD:?Set TAMAGOTCHI_DB_PASSWORD in .env}
-      GUILD_DB_PASSWORD: ${GUILD_DB_PASSWORD:?Set GUILD_DB_PASSWORD in .env}
-      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Set NOTIFICATION_DB_PASSWORD in .env}
-      USER_MANAGEMENT_DB_PASSWORD: ${USER_MANAGEMENT_DB_PASSWORD:?Set USER_MANAGEMENT_DB_PASSWORD in .env}
-      MAP_DB_PASSWORD: ${MAP_DB_PASSWORD:?Set MAP_DB_PASSWORD in .env}
-      RAID_DB_PASSWORD: ${RAID_DB_PASSWORD:?Set RAID_DB_PASSWORD in .env}
-      REGISTRY_DB_PASSWORD: ${REGISTRY_DB_PASSWORD:?Set REGISTRY_DB_PASSWORD in .env}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+# Postgres superuser (used only by the postgres container and db/init)
+POSTGRES_PASSWORD=change_me
+# Host port for Postgres; change it if 5432 is already taken on your machine
+POSTGRES_HOST_PORT=5432
 
-  battle-service:
-    image: ekkusuu/tamagotchi-battle-service:0.1.0
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      PORT: "8081"
-      STORAGE: postgres
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: battle_db
-      DB_USER: battle_user
-      DB_PASSWORD: ${BATTLE_DB_PASSWORD:?Set BATTLE_DB_PASSWORD in .env}
-      DB_SSLMODE: disable
-      RUN_MIGRATIONS: "true"
-      USE_MOCKS: "true"
-      AUTH_MODE: mock
-      SEED_ON_START: "true"
-    ports:
-      - "127.0.0.1:8081:8081"
-
-  tamagotchi-service:
-    image: ekkusuu/tamagotchi-tamagotchi-service:0.1.0
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      PORT: "8082"
-      STORAGE: postgres
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: tamagotchi_db
-      DB_USER: tamagotchi_user
-      DB_PASSWORD: ${TAMAGOTCHI_DB_PASSWORD:?Set TAMAGOTCHI_DB_PASSWORD in .env}
-      DB_SSLMODE: disable
-      RUN_MIGRATIONS: "true"
-      USE_MOCKS: "true"
-      AUTH_MODE: mock
-      SEED_ON_START: "true"
-    ports:
-      - "127.0.0.1:8082:8082"
-
-volumes:
-  pgdata:
+# One database user per service, created by db/init/01-create-databases.sh
+BATTLE_DB_PASSWORD=change_me
+TAMAGOTCHI_DB_PASSWORD=change_me
+GUILD_DB_PASSWORD=change_me
+NOTIFICATION_DB_PASSWORD=change_me
+USER_MANAGEMENT_DB_PASSWORD=change_me
+MAP_DB_PASSWORD=change_me
+RAID_DB_PASSWORD=change_me
+REGISTRY_DB_PASSWORD=change_me
