@@ -13,6 +13,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
 - [Lab 1 — Running Sava's services](#lab-1--running-savas-services)
+- [Lab 1 — Running User Management and Map](#lab-1--running-user-management-and-map)
 - [Repository setup and Lab 0 checklist](#repository-setup-and-lab-0-checklist)
 
 ## Team and service boundaries
@@ -554,6 +555,27 @@ A single `postgres` container (PostGIS image) hosts all eight databases with one
 
 **Team requirement still pending:** this common Compose file contains Sava's two services on the shared postgres host. The other six owners must contribute their published image tags and runtime settings for the full-team deployment. PR #28 also requires a teammate's review/merge; CI passing alone is not approval.
 
+## Lab 1 — Running User Management and Map
+
+Mădălina's NestJS + Prisma services follow the [team Lab 1 conventions](docs/lab-1-conventions.md). They implement the full Lab 0 contract for their endpoints, including wallet settlement rules and PostGIS proximity with one `UsersNearby` event per encounter. `AUTH_MODE=mock` selects the caller with `X-Mock-User-Id` (and `X-Service-Name` on internal routes). User Management also issues real RS256 tokens (login, refresh, logout, JWKS), which it accepts next to the mock header.
+
+**Public Docker Hub images (public, versioned):**
+
+- [`madalina060504/tamagotchi-user-management-service:0.1.1`](https://hub.docker.com/r/madalina060504/tamagotchi-user-management-service) — REST on port 8085
+- [`madalina060504/tamagotchi-map-service:0.1.1`](https://hub.docker.com/r/madalina060504/tamagotchi-map-service) — REST on port 8086
+
+`0.1.1` is the first release that follows the conventions (`DB_*`, `AUTH_MODE`, `USE_MOCKS`, `SEED_ON_START`). The earlier `0.1.0` images under other names predate them and are not used here.
+
+**Requirements:** Docker Desktop (on Windows with WSL 2) or Docker Engine + Compose v2, and ports 5432 and 8085–8086 free. Node.js is not needed for the Compose path. Both services run inside the shared stack started by `docker compose up -d --wait` above; `db/init` creates `user_management_db` and `map_db` (with PostGIS).
+
+**Data:** each container applies its Prisma migrations on start. User Management seeds Alice, Bob, Carol and admin (password `password123`), the Alice–Bob friendship, Carol's enemy marker on Bob and wallet balances, but only while its users table is empty. Map has nothing to seed because locations are live data. See [`db/seed.md`](db/seed.md).
+
+**Mocks (`USE_MOCKS=true`):** User Management replaces Package Registry (registrations and raid definitions consistent with the seed). Map replaces User Management (relationships and profiles consistent with the seed). Events go to a transactional outbox and are logged instead of published to RabbitMQ.
+
+**Verify:** import `postman/local.postman_environment.json` and run `postman/user-management-service.postman_collection.json` (28 requests) and `postman/map-service.postman_collection.json` (12 requests) top to bottom. Every request asserts its status and body, and both collections can run repeatedly against the same data. The Lab 1 smoke workflow runs them with Newman as well.
+
+**Differences from the conventions:** PostgreSQL-only storage (no `STORAGE=memory`), and `Idempotency-Key` is enforced on mutating routes as the contract requires. Both are listed in [section 14 of the conventions](docs/lab-1-conventions.md#14-known-deviations-from-the-lab-0-contract-in-lab-1). Private READMEs document the endpoints, configuration and error codes.
+
 ## Repository setup and Lab 0 checklist
 
 The common repository stores shared documentation, collaboration files and Git submodule pointers. Each private service repository stores that service's README and, in later labs, implementation.
@@ -564,8 +586,8 @@ The common repository stores shared documentation, collaboration files and Git s
 | `services/tamagotchi-service` | [Ekkusuu/tamagotchi-service](https://github.com/Ekkusuu/tamagotchi-service) | Lab 1 CRUD implementation published; linked as submodule |
 | `services/guild-service` | [vikanicologlo/guild-service](https://github.com/vikanicologlo/guild-service) | Contract README published; linked as submodule |
 | `services/notification-service` | [vikanicologlo/notification-service](https://github.com/vikanicologlo/notification-service) | Contract README published; linked as submodule |
-| `services/user-management-service` | [MadalinaDev/user-management-service](https://github.com/MadalinaDev/user-management-service) | Contract README published; linked as submodule |
-| `services/map-service` | [MadalinaDev/map-service](https://github.com/MadalinaDev/map-service) | Contract README published; linked as submodule |
+| `services/user-management-service` | [MadalinaDev/user-management-service](https://github.com/MadalinaDev/user-management-service) | Lab 1 implementation published (`v0.1.1`); linked as submodule |
+| `services/map-service` | [MadalinaDev/map-service](https://github.com/MadalinaDev/map-service) | Lab 1 implementation published (`v0.1.1`); linked as submodule |
 | `services/monster-raid-service` | [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service) | Contract README published; linked as submodule |
 | `services/package-registry-service` | [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service) | Contract README published; linked as submodule |
 

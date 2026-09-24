@@ -1,0 +1,948 @@
+{
+  "info": {
+    "name": "User Management Lab 1 regression suite",
+    "description": "Every User Management endpoint against the seeded data (AUTH_MODE=mock: X-Mock-User-Id / X-Service-Name). Seed users: Alice (user_id), Bob and Carol; password password123. Safe to run repeatedly.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.environment.get('user_management_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('user_management_base_url'));",
+          "pm.collectionVariables.set('now', new Date().toISOString());"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8085"
+    },
+    {
+      "key": "user_id",
+      "value": "00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "key": "bob_id",
+      "value": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "key": "carol_id",
+      "value": "00000000-0000-4000-8000-000000000003"
+    },
+    {
+      "key": "package_a",
+      "value": "00000000-0000-4000-8000-0000000000a1"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/health"
+      }
+    },
+    {
+      "name": "Missing auth is 401",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 401', () => pm.response.to.have.status(401));",
+              "pm.test('error code UNAUTHENTICATED', () => pm.expect(pm.response.json().code).to.eql('UNAUTHENTICATED'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/v1/users/me"
+      }
+    },
+    {
+      "name": "Get me (Alice)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('alice', () => pm.expect(pm.response.json().username).to.eql('alice'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/users/me"
+      }
+    },
+    {
+      "name": "Register user",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('new_username', 'user' + Date.now());"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));",
+              "const user = pm.response.json();",
+              "pm.test('no password in response', () => pm.expect(user).to.not.have.property('password'));",
+              "pm.collectionVariables.set('new_user_id', user.user_id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/users",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{new_username}}\",\n  \"email\": \"{{new_username}}@example.com\",\n  \"password\": \"correct-horse-1\",\n  \"display_name\": \"New user\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Register with unknown field is 422",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 422', () => pm.response.to.have.status(422));",
+              "pm.test('is_admin rejected', () => pm.expect(pm.response.json().details.map(d => d.field)).to.include('is_admin'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/users",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"mallory1\",\n  \"email\": \"mallory1@example.com\",\n  \"password\": \"correct-horse-1\",\n  \"display_name\": \"M\",\n  \"is_admin\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Login (seeded Alice)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const tokens = pm.response.json();",
+              "pm.test('bearer tokens', () => pm.expect(tokens.token_type).to.eql('Bearer'));",
+              "pm.collectionVariables.set('access_token', tokens.access_token);",
+              "pm.collectionVariables.set('refresh_token', tokens.refresh_token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"alice@example.com\",\n  \"password\": \"password123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Get me with access token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('alice', () => pm.expect(pm.response.json().user_id).to.eql(pm.collectionVariables.get('user_id')));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/users/me"
+      }
+    },
+    {
+      "name": "Refresh tokens",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('refresh_token', pm.response.json().refresh_token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/auth/refresh",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "JWKS",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('RS256 key', () => pm.expect(pm.response.json().keys[0].alg).to.eql('RS256'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/v1/auth/jwks"
+      }
+    },
+    {
+      "name": "Get public profile (Bob)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('bob', () => pm.expect(pm.response.json().username).to.eql('bob'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/users/{{bob_id}}"
+      }
+    },
+    {
+      "name": "Update my display name",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('updated', () => pm.expect(pm.response.json().display_name).to.eql('Alice'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/users/me",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"display_name\": \"Alice\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "My relationships (Alice)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Bob is a friend', () => pm.expect(pm.response.json().friend_ids).to.include(pm.collectionVariables.get('bob_id')));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/relationships"
+      }
+    },
+    {
+      "name": "List friendships",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('page shape', () => pm.expect(pm.response.json()).to.have.property('next_cursor'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/friendships?limit=10"
+      }
+    },
+    {
+      "name": "Send friend request",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));",
+              "pm.test('pending', () => pm.expect(pm.response.json().status).to.eql('pending'));",
+              "pm.collectionVariables.set('friendship_id', pm.response.json().friendship_id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/friendships",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"recipient_id\": \"{{new_user_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Accept friend request (as recipient)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('accepted', () => pm.expect(pm.response.json().status).to.eql('accepted'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{new_user_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/friendships/{{friendship_id}}/acceptance",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Remove friendship",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 204', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/friendships/{{friendship_id}}"
+      }
+    },
+    {
+      "name": "Mark enemy",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('marked', () => pm.expect(pm.response.json().enemy_ids).to.include(pm.collectionVariables.get('new_user_id')));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/enemies/{{new_user_id}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Mark a friend as enemy is 409",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 409', () => pm.response.to.have.status(409));",
+              "pm.test('error code ACCEPTED_FRIENDSHIP', () => pm.expect(pm.response.json().code).to.eql('ACCEPTED_FRIENDSHIP'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/enemies/{{bob_id}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Remove enemy marker",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 204', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/enemies/{{new_user_id}}"
+      }
+    },
+    {
+      "name": "My wallets",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('has a global wallet', () => pm.expect(pm.response.json().wallets.some(w => w.currency === 'global')).to.be.true);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/wallets"
+      }
+    },
+    {
+      "name": "My wallet entries",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('page shape', () => pm.expect(pm.response.json().items).to.be.an('array'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/wallet-entries?limit=5"
+      }
+    },
+    {
+      "name": "Internal: get user",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Service-Name",
+            "value": "map"
+          }
+        ],
+        "url": "{{base_url}}/internal/v1/users/{{user_id}}"
+      }
+    },
+    {
+      "name": "Internal: relationships",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('friends listed', () => pm.expect(pm.response.json().friend_ids).to.include(pm.collectionVariables.get('bob_id')));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Service-Name",
+            "value": "map"
+          }
+        ],
+        "url": "{{base_url}}/internal/v1/users/{{user_id}}/relationships"
+      }
+    },
+    {
+      "name": "Internal: users batch",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('two users', () => pm.expect(pm.response.json().users).to.have.length(2));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Service-Name",
+            "value": "map"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/internal/v1/users/batch",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_ids\": [\n    \"{{user_id}}\",\n    \"{{bob_id}}\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Internal: battle settlement",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('winner credited 50', () => pm.expect(pm.response.json().entries[0].delta).to.eql(50));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Service-Name",
+            "value": "battle"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/internal/v1/wallets/settlements",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"operation_id\": \"{{$guid}}\",\n  \"source_kind\": \"battle\",\n  \"source_id\": \"{{$guid}}\",\n  \"winner_id\": \"{{user_id}}\",\n  \"loser_id\": \"{{carol_id}}\",\n  \"recipient_ids\": [\n    \"{{user_id}}\"\n  ],\n  \"reward_per_recipient\": 50,\n  \"loser_penalty\": 20,\n  \"rules_version\": 1,\n  \"definition_id\": null,\n  \"definition_version\": null\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Internal: settlement from the wrong service is 403",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 403', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Service-Name",
+            "value": "map"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/internal/v1/wallets/settlements",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"operation_id\": \"{{$guid}}\",\n  \"source_kind\": \"battle\",\n  \"source_id\": \"{{$guid}}\",\n  \"winner_id\": \"{{user_id}}\",\n  \"loser_id\": \"{{carol_id}}\",\n  \"recipient_ids\": [\n    \"{{user_id}}\"\n  ],\n  \"reward_per_recipient\": 50,\n  \"loser_penalty\": 20,\n  \"rules_version\": 1,\n  \"definition_id\": null,\n  \"definition_version\": null\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Internal: local wallet operation (package A backend)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('local currency', () => pm.expect(pm.response.json().entries[0].currency).to.eql('local'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Service-Name",
+            "value": "package:{{package_a}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/internal/v1/wallets/local-operations",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"operation_id\": \"{{$guid}}\",\n  \"package_id\": \"{{package_a}}\",\n  \"user_id\": \"{{user_id}}\",\n  \"delta\": 5,\n  \"reason\": \"daily quest\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Logout",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 204', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/auth/logout",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
