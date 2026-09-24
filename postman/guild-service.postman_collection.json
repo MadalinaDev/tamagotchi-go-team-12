@@ -1,0 +1,1258 @@
+{
+  "info": {
+    "name": "guild-service",
+    "description": "Guild service (Vica), Lab 1. Run the whole collection in order with the Collection Runner: it creates a guild as Alice ({{user_id}}), invites Bob, chats, exercises every endpoint and finally disbands the guild. Auth is mocked: X-Mock-User-Id selects the caller. Internal routes only need X-Service-Name. User Management and Package Registry are mocked (Alice and Bob are friends and share package A; Carol is not Alice's friend).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Guilds",
+      "item": [
+        {
+          "name": "Create guild (Alice becomes leader)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Founders {{$timestamp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"guild_id\", pm.response.json().guild_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List guilds",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds?limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get guild",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rename guild (leader)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Founders Club {{$timestamp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Invites and members",
+      "item": [
+        {
+          "name": "Invite Bob (leader/officer)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}/invites",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "invites"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitee_id\": \"{{bob_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"invite_id\", pm.response.json().invite_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List my invites (Bob)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{bob_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guild-invites",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guild-invites"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Accept invite (Bob)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{bob_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guild-invites/{{invite_id}}/accept",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guild-invites",
+                "{{invite_id}}",
+                "accept"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List members",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "members"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Change role: Bob -> officer (leader)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}/members/{{bob_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "members",
+                "{{bob_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"officer\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invite Carol -> 409 NOT_FRIENDS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}/invites",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "invites"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitee_id\": \"{{carol_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leave guild (Bob)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{bob_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}/members/{{bob_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "members",
+                "{{bob_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invite Bob again",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}/invites",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "invites"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitee_id\": \"{{bob_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"invite_id\", pm.response.json().invite_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Decline invite (Bob)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{bob_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guild-invites/{{invite_id}}/decline",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guild-invites",
+                "{{invite_id}}",
+                "decline"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invite Bob to cancel it",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}/invites",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "invites"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitee_id\": \"{{bob_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"invite_id\", pm.response.json().invite_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancel invite (inviter or leader)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guild-invites/{{invite_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guild-invites",
+                "{{invite_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invite Bob to remove him",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}/invites",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "invites"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitee_id\": \"{{bob_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"invite_id\", pm.response.json().invite_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Accept invite again (Bob)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{bob_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guild-invites/{{invite_id}}/accept",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guild-invites",
+                "{{invite_id}}",
+                "accept"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Messages (REST chat)",
+      "item": [
+        {
+          "name": "Send message (Bob)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{bob_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}/messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "messages"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_message_id\": \"{{$guid}}\",\n  \"text\": \"Hello, Founders!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"message_id\", pm.response.json().message_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send message (Alice)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}/messages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "messages"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_message_id\": \"{{$guid}}\",\n  \"text\": \"Welcome, Bob!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List messages",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}/messages?limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List messages after a message (reconnect)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}/messages?after_message_id={{message_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "after_message_id",
+                  "value": "{{message_id}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Internal (other services)",
+      "item": [
+        {
+          "name": "Internal: get guild",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Name",
+                "value": "package-registry"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/internal/v1/guilds/{{guild_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "internal",
+                "v1",
+                "guilds",
+                "{{guild_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Internal: list all members",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Name",
+                "value": "notification"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/internal/v1/guilds/{{guild_id}}/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "internal",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "members"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Internal: get member",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Name",
+                "value": "monster-raid"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/internal/v1/guilds/{{guild_id}}/members/{{bob_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "internal",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "members",
+                "{{bob_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "item": [
+        {
+          "name": "Remove member Bob (leader)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}/members/{{bob_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}",
+                "members",
+                "{{bob_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Disband guild (leader)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{guild_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{guild_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8083"
+    },
+    {
+      "key": "user_id",
+      "value": "00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "key": "admin_id",
+      "value": "00000000-0000-4000-8000-000000000009"
+    },
+    {
+      "key": "bob_id",
+      "value": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "key": "carol_id",
+      "value": "00000000-0000-4000-8000-000000000003"
+    },
+    {
+      "key": "guild_id",
+      "value": ""
+    },
+    {
+      "key": "invite_id",
+      "value": ""
+    },
+    {
+      "key": "message_id",
+      "value": ""
+    }
+  ]
+}
