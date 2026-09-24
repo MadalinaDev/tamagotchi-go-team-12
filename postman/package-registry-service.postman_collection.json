@@ -67,6 +67,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
                 ]
               }
@@ -87,6 +88,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "if (pm.response.code < 300) pm.collectionVariables.set('package_id', pm.response.json().package_id);",
                   "pm.test('definition v1', () => pm.expect(pm.response.json().current_definition_version).to.eql(1));"
                 ]
@@ -130,6 +132,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
                 ]
               }
@@ -168,6 +171,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
                 ]
               }
@@ -210,6 +214,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('page shape', () => { const b = pm.response.json(); pm.expect(b.items).to.be.an('array'); pm.expect(b).to.have.property('next_cursor'); });"
                 ]
               }
@@ -234,7 +239,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
                 ]
               }
             }
@@ -259,6 +265,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('description updated', () => pm.expect(pm.response.json().description).to.eql('Updated by the developer'));"
                 ]
               }
@@ -297,6 +304,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
                 ]
               }
@@ -340,6 +348,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('next version', () => pm.expect(pm.response.json().version).to.eql(2));"
                 ]
               }
@@ -378,6 +387,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 422', () => pm.response.to.have.status(422));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
                 ]
               }
@@ -415,7 +425,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
                 ]
               }
             }
@@ -444,7 +455,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 201', () => pm.response.to.have.status(201));"
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
                 ]
               }
             }
@@ -482,6 +494,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
                 ]
               }
@@ -520,6 +533,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('contains the package', () => pm.expect(pm.response.json().registrations.map(r => r.package_id)).to.include(pm.collectionVariables.get('package_id')));"
                 ]
               }
@@ -550,6 +564,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "if (pm.response.code < 300) pm.collectionVariables.set('definition_id', pm.response.json().definition_id);"
                 ]
               }
@@ -592,6 +607,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 422', () => pm.response.to.have.status(422));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
                 ]
               }
@@ -634,6 +650,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
                 ]
               }
@@ -672,6 +689,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('version 2', () => pm.expect(pm.response.json().version).to.eql(2));"
                 ]
               }
@@ -713,7 +731,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
                 ]
               }
             }
@@ -741,7 +760,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
                 ]
               }
             }
@@ -775,6 +795,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "if (pm.response.code < 300) pm.collectionVariables.set('schedule_id', pm.response.json().schedule_id);",
                   "pm.test('scheduled', () => pm.expect(pm.response.json().state).to.eql('scheduled'));"
                 ]
@@ -818,6 +839,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 422', () => pm.response.to.have.status(422));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
                 ]
               }
@@ -859,7 +881,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
                 ]
               }
             }
@@ -888,6 +911,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 202', () => pm.response.to.have.status(202));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('activated', () => pm.expect(pm.response.json().state).to.eql('activated'));"
                 ]
               }
@@ -930,6 +954,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
                 ]
               }
@@ -972,6 +997,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 202', () => pm.response.to.have.status(202));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('cancelled', () => pm.expect(pm.response.json().state).to.eql('cancelled'));"
                 ]
               }
@@ -1018,7 +1044,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
                 ]
               }
             }
@@ -1042,7 +1069,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
                 ]
               }
             }
@@ -1066,7 +1094,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
                 ]
               }
             }
@@ -1090,7 +1119,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
                 ]
               }
             }
@@ -1115,6 +1145,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
                   "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
                 ]
               }

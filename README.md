@@ -561,7 +561,7 @@ Sabina's NestJS + Prisma services implement the **Lab 1 subset** of the [team La
 
 **Public Docker Hub images (versioned):**
 
-- [`sabinapopescu/tamagotchi-monster-raid-service:0.1.1`](https://hub.docker.com/r/sabinapopescu/tamagotchi-monster-raid-service): REST on port 8087, database `raid_db` / `raid_user`
+- [`sabinapopescu/tamagotchi-monster-raid-service:0.1.2`](https://hub.docker.com/r/sabinapopescu/tamagotchi-monster-raid-service): REST on port 8087, database `raid_db` / `raid_user`
 - [`sabinapopescu/tamagotchi-package-registry-service:0.1.0`](https://hub.docker.com/r/sabinapopescu/tamagotchi-package-registry-service): REST on port 8088, database `registry_db` / `registry_user`
 
 **Requirements:** Docker Desktop (or Docker Engine), ports 8087–8088 free. Node.js is not required to run the images. Database passwords must use letters and digits only: the entrypoint puts them into `DATABASE_URL` without encoding.
@@ -588,7 +588,7 @@ docker run -d --name monster-raid-service --network tamagotchi-lab1 -p 8087:8087
   --restart on-failure -e PORT=8087 -e DB_HOST=raid-db -e DB_PORT=5432 \
   -e DB_NAME=raid_db -e DB_USER=raid_user -e DB_PASSWORD=<raid password> \
   -e RUN_MIGRATIONS=true -e AUTH_MODE=mock \
-  sabinapopescu/tamagotchi-monster-raid-service:0.1.1
+  sabinapopescu/tamagotchi-monster-raid-service:0.1.2
 ```
 
 `--restart on-failure` retries while Postgres is still starting. In the common Compose file the same variables apply, with `DB_HOST=postgres` and the `RAID_DB_PASSWORD` / `REGISTRY_DB_PASSWORD` values from `.env`. Each service repository also ships a `docker-compose.yml` for running it with its own database.
@@ -607,7 +607,6 @@ docker run -d --name monster-raid-service --network tamagotchi-lab1 -p 8087:8087
 | Temporary `POST /internal/v1/dev/raid-events` instead of consuming `raid.scheduling.v1` | Monster Raid | When RabbitMQ is added |
 | No timer worker: an overdue raid fails lazily on the next request that loads it | Monster Raid | Later lab |
 | No `429` attack rate limit; no cancellation tombstones (`RaidCancellationRequested` not consumed); settlement retries only on the next request | Monster Raid | Later labs |
-| Malformed `raid_id` returns `400` instead of `422`; `request_id` only in error bodies, no `X-Request-Id` header | Monster Raid | Next patch release |
 | Staff/moderator endpoints skipped; the package developer is the only package staff | Package Registry | Later lab |
 | No persisted scheduler; schedules are activated only through `POST …/activate` | Package Registry | Later lab |
 
@@ -623,7 +622,7 @@ The common repository stores shared documentation, collaboration files and Git s
 | `services/notification-service` | [vikanicologlo/notification-service](https://github.com/vikanicologlo/notification-service) | Contract README published; linked as submodule |
 | `services/user-management-service` | [MadalinaDev/user-management-service](https://github.com/MadalinaDev/user-management-service) | Contract README published; linked as submodule |
 | `services/map-service` | [MadalinaDev/map-service](https://github.com/MadalinaDev/map-service) | Contract README published; linked as submodule |
-| `services/monster-raid-service` | [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service) | Lab 1 implementation published (image `0.1.1`); linked as submodule |
+| `services/monster-raid-service` | [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service) | Lab 1 implementation published (image `0.1.2`); linked as submodule |
 | `services/package-registry-service` | [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service) | Lab 1 implementation published (image `0.1.0`); linked as submodule |
 
 Do not add fake submodules or copy private source into public folders. A real submodule needs a remote URL and an existing commit. To add one from the common repo after the service owner has pushed its README:

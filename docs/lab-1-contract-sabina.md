@@ -1,13 +1,13 @@
 # Lab 1 implemented contract — Sabina
 
-This addendum describes **tamagotchi-monster-raid-service:0.1.1** and **tamagotchi-package-registry-service:0.1.0**, which implement the Lab 1 subset of the [team Lab 1 conventions](lab-1-conventions.md) (§13). Paths, `snake_case` field names, status codes and schemas are those of the Lab 0 [Monster Raid API](../README.md#monster-raid-api) and [Package Registry API](../README.md#package-registry-api). This page records only what Lab 1 adds, leaves out or interprets. Owners of affected services: please review the sections that concern you.
+This addendum describes **tamagotchi-monster-raid-service:0.1.2** and **tamagotchi-package-registry-service:0.1.0**, which implement the Lab 1 subset of the [team Lab 1 conventions](lab-1-conventions.md) (§13). Paths, `snake_case` field names, status codes and schemas are those of the Lab 0 [Monster Raid API](../README.md#monster-raid-api) and [Package Registry API](../README.md#package-registry-api). This page records only what Lab 1 adds, leaves out or interprets. Owners of affected services: please review the sections that concern you.
 
 ## Common wire rules (both services)
 
 - **Public routes** (`/api/v1`) require `X-Mock-User-Id: <Id>`; `X-Mock-Roles: admin` marks a global admin. A missing or non-UUID header returns `401`; a missing role returns `403`. The header is a mock identity selector, not authentication.
 - **Internal routes** (`/internal/v1`) require only `X-Service-Name: <caller>`, otherwise `401`.
 - **Idempotency:** `Idempotency-Key` is accepted and ignored. Business operation ids are still enforced: raid settlement `operation_id`, one raid per `schedule_id`, and one participation per (raid, user).
-- **Errors:** `{code, message, request_id, details: {field, reason}[]}`. Invalid body field values return `422`. Package Registry also returns `422` for malformed path ids and echoes `request_id` in the `X-Request-Id` response header. Monster Raid 0.1.1 returns `400 BAD_REQUEST` for a malformed `raid_id` and puts `request_id` only in error bodies; aligning it to `422` and the header is a follow-up.
+- **Errors:** `{code, message, request_id, details: {field, reason}[]}`. Invalid field values, including malformed path ids, return `422` with the field named in `details`. Every response carries an `X-Request-Id` header (the caller's value when it is at most 200 characters, otherwise a new UUID), and error bodies repeat it as `request_id`. Monster Raid adopted both in 0.1.2; 0.1.1 still returned `400` for a malformed `raid_id`.
 - **Pagination:** lists accept `limit` (1–100, default 20) and an opaque `cursor`, and return `{items, next_cursor}` ordered by `created_at`, then id.
 - **Storage:** PostgreSQL with Prisma migrations, applied by the container entrypoint when `RUN_MIGRATIONS=true`. There is no seeding on startup and no health endpoint (§0).
 - **Events:** go through an `EventPublisher` interface whose Lab 1 implementation logs the `Event<T>` envelope. There is no RabbitMQ or outbox.
