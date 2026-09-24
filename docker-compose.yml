@@ -64,24 +64,38 @@ services:
   battle-service:
     <<: *service
     image: ekkusuu/tamagotchi-battle-service:0.1.0
+    # Published for amd64 only; runs emulated on Apple Silicon.
+    platform: linux/amd64
     environment:
       <<: *service-env
       PORT: "8081"
       DB_NAME: battle_db
       DB_USER: battle_user
       DB_PASSWORD: ${BATTLE_DB_PASSWORD}
+      # Extra settings read by Sava's images (see PR #28).
+      STORAGE: postgres
+      DB_SSLMODE: disable
+      USE_MOCKS: "true"
+      SEED_ON_START: "true"
     ports:
       - "8081:8081"
 
   tamagotchi-service:
     <<: *service
     image: ekkusuu/tamagotchi-tamagotchi-service:0.1.0
+    # Published for amd64 only; runs emulated on Apple Silicon.
+    platform: linux/amd64
     environment:
       <<: *service-env
       PORT: "8082"
       DB_NAME: tamagotchi_db
       DB_USER: tamagotchi_user
       DB_PASSWORD: ${TAMAGOTCHI_DB_PASSWORD}
+      # Extra settings read by Sava's images (see PR #28).
+      STORAGE: postgres
+      DB_SSLMODE: disable
+      USE_MOCKS: "true"
+      SEED_ON_START: "true"
     ports:
       - "8082:8082"
 
