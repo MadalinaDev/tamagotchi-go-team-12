@@ -98,25 +98,38 @@ services:
 
   guild-service:
     <<: *service
-    image: nikvnln/tamagotchi-guild-service:0.1.0
+    # 0.1.1: STORAGE, USE_MOCKS, SEED_ON_START and /health (conventions section 3).
+    image: nikvnln/tamagotchi-guild-service:0.1.1
     environment:
       <<: *service-env
       PORT: "8083"
+      STORAGE: postgres
       DB_NAME: guild_db
       DB_USER: guild_user
       DB_PASSWORD: ${GUILD_DB_PASSWORD}
+      USE_MOCKS: "true"
+      SEED_ON_START: "true"
+      # Used only with USE_MOCKS=false.
+      USER_MANAGEMENT_URL: http://user-management-service:8085
+      REGISTRY_URL: http://package-registry-service:8088
     ports:
       - "8083:8083"
 
   notification-service:
     <<: *service
-    image: nikvnln/tamagotchi-notification-service:0.1.0
+    # 0.1.1: STORAGE, USE_MOCKS, SEED_ON_START and /health (conventions section 3).
+    image: nikvnln/tamagotchi-notification-service:0.1.1
     environment:
       <<: *service-env
       PORT: "8084"
+      STORAGE: postgres
       DB_NAME: notification_db
       DB_USER: notification_user
       DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      USE_MOCKS: "true"
+      SEED_ON_START: "true"
+      # Used only with USE_MOCKS=false.
+      GUILD_URL: http://guild-service:8083
     ports:
       - "8084:8084"
 
@@ -124,6 +137,8 @@ services:
     <<: *service
     # 0.1.1: first image that follows these conventions (DB_*, AUTH_MODE, USE_MOCKS).
     image: madalina060504/tamagotchi-user-management-service:0.1.1
+    # Published for amd64 only; runs emulated on Apple Silicon.
+    platform: linux/amd64
     environment:
       <<: *service-env
       PORT: "8085"
@@ -138,6 +153,8 @@ services:
   map-service:
     <<: *service
     image: madalina060504/tamagotchi-map-service:0.1.1
+    # Published for amd64 only; runs emulated on Apple Silicon.
+    platform: linux/amd64
     environment:
       <<: *service-env
       PORT: "8086"
@@ -154,6 +171,8 @@ services:
   monster-raid-service:
     <<: *service
     image: sabinapopescu/tamagotchi-monster-raid-service:0.1.2
+    # Published for amd64 only; runs emulated on Apple Silicon.
+    platform: linux/amd64
     environment:
       <<: *service-env
       PORT: "8087"
@@ -166,6 +185,8 @@ services:
   package-registry-service:
     <<: *service
     image: sabinapopescu/tamagotchi-package-registry-service:0.1.0
+    # Published for amd64 only; runs emulated on Apple Silicon.
+    platform: linux/amd64
     environment:
       <<: *service-env
       PORT: "8088"

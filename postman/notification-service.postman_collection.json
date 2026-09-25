@@ -1,10 +1,87 @@
 {
   "info": {
     "name": "notification-service",
-    "description": "Notification service (Vica), Lab 1. Run the whole collection in order. Without RabbitMQ, events are injected through the temporary route POST /internal/v1/dev/events (Lab 1 deviation). Auth is mocked with X-Mock-User-Id; internal routes need X-Service-Name. Guild and Firebase are mocked: guild {{founders_guild_id}} has Alice, Bob and Carol; pushes are only logged.",
+    "description": "Notification service (Vica), Lab 1. Run the whole collection in order. Without RabbitMQ, events are injected through the temporary route POST /internal/v1/dev/events (Lab 1 deviation). Auth is mocked with X-Mock-User-Id; internal routes need X-Service-Name. With SEED_ON_START=true Bob starts with two unread inbox entries. Guild and Firebase are mocked: guild {{founders_guild_id}} has Alice, Bob and Carol; pushes are only logged.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
+    {
+      "name": "Seeded data",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Inbox of Bob (seeded friend request and battle challenge)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{bob_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/notifications?unread=true",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "unread",
+                  "value": "true"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
     {
       "name": "Devices",
       "item": [

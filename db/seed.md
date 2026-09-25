@@ -18,5 +18,7 @@ The files in [`seed/`](seed) are read-only copies for reviewers and for Postman.
 | Tamagotchi | [`seed/tamagotchi-service.sql`](seed/tamagotchi-service.sql) | Alice's and Bob's starter pets |
 | User Management | [`seed/user-management-service.json`](seed/user-management-service.json) | Alice, Bob, Carol and admin (password `password123`), the Alice–Bob friendship, Carol's enemy marker on Bob, and global/local wallet balances recorded as one ledger operation |
 | Map | none | Nothing: Map stores only live locations, which expire after 120 s. The Postman collection shares locations itself |
+| Guild | [`seed/guild-service.sql`](seed/guild-service.sql) | Guild "Founders" `…00c1` with leader Alice and members Bob and Carol |
+| Notification | [`seed/notification-service.sql`](seed/notification-service.sql) | Two unread entries in Bob's inbox: Alice's friend request (friendship `…00e1`) and battle challenge (battle `…00e1`) |
 
 Owners of the remaining services add their row and file when their seed exists.

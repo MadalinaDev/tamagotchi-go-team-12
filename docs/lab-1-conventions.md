@@ -26,7 +26,7 @@ Stack (as fixed in the Lab 0 README): Go for Battle, Tamagotchi, Guild and Notif
 | Monster Raid | 8087 | NestJS | tamagotchi-monster-raid-service | raid_db / raid_user |
 | Package Registry | 8088 | NestJS | tamagotchi-package-registry-service | registry_db / registry_user |
 
-Image reference: `<owner_dockerhub_username>/<image name>:0.1.0`. Each owner publishes to their own public Docker Hub repositories. Docker Hub usernames: Sava **ekkusuu**, Vica ____, Madalina **madalina060504**, Sabina ____.
+Image reference: `<owner_dockerhub_username>/<image name>:0.1.0`. Each owner publishes to their own public Docker Hub repositories. Docker Hub usernames: Sava **ekkusuu**, Vica **nikvnln**, Madalina **madalina060504**, Sabina ____.
 
 Lab 1 tag for every image: **0.1.0**. Fixes: 0.1.1, etc. Never rely on latest.
 
