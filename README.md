@@ -15,6 +15,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Lab 1 — Running Sava's services](#lab-1--running-savas-services)
 - [Lab 1 — Running User Management and Map](#lab-1--running-user-management-and-map)
 - [Lab 1 — Running Sabina's services](#lab-1--running-sabinas-services)
+- [Lab 1 — Running Vica's services](#lab-1--running-vicas-services)
 - [Repository setup and Lab 0 checklist](#repository-setup-and-lab-0-checklist)
 
 ## Team and service boundaries
@@ -639,6 +640,59 @@ docker run -d --name monster-raid-service --network tamagotchi-lab1 -p 8087:8087
 | Staff/moderator endpoints skipped; the package developer is the only package staff | Package Registry | Later lab |
 | No persisted scheduler; schedules are activated only through `POST …/activate` | Package Registry | Later lab |
 
+## Lab 1 — Running Vica's services
+
+Vica's Go services implement the **Lab 1 subset** of the [team Lab 1 conventions](docs/lab-1-conventions.md) (§13). The [Lab 1 contract notes](docs/lab-1-contract-vica.md) list what differs from the Lab 0 contract above. `X-Mock-User-Id` selects a simulated caller; internal routes require `X-Service-Name`. User Management, Package Registry, Guild (for Notification) and Firebase are mocked.
+
+**Public Docker Hub images (public, versioned, linux/amd64 and linux/arm64):**
+
+- [`nikvnln/tamagotchi-guild-service:0.1.0`](https://hub.docker.com/r/nikvnln/tamagotchi-guild-service): REST on port 8083, database `guild_db` / `guild_user`
+- [`nikvnln/tamagotchi-notification-service:0.1.0`](https://hub.docker.com/r/nikvnln/tamagotchi-notification-service): REST on port 8084, database `notification_db` / `notification_user`
+
+**Requirements:** Docker Desktop (or Docker Engine + Compose v2), ports 8083–8084 free (and 5432 for Postgres, or set `POSTGRES_HOST_PORT` in `.env`). Go is not required to run the images; Go 1.22+ only for `go run` from the private repositories. Database passwords: letters, digits and underscores.
+
+**Environment:** `PORT`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `RUN_MIGRATIONS=true` and `AUTH_MODE=mock`. Each service applies its SQL migrations (golang-migrate, embedded in the binary) on start. Neither service seeds data; the Postman collections create what they need.
+
+**Run with the team stack:** both services are in [docker-compose.yml](docker-compose.yml) (`guild-service`, `notification-service`) on the shared `postgres`, with `GUILD_DB_PASSWORD` / `NOTIFICATION_DB_PASSWORD` from `.env`:
+
+```sh
+cp .env.example .env   # set all nine *_PASSWORD values
+docker compose up -d --wait
+# or only these two: docker compose up -d --wait postgres guild-service notification-service
+```
+
+**Run standalone** (one service with its own Postgres):
+
+```sh
+docker network create tamagotchi-lab1
+docker run -d --name guild-db --network tamagotchi-lab1 -e POSTGRES_DB=guild_db \
+  -e POSTGRES_USER=guild_user -e POSTGRES_PASSWORD=<guild password> \
+  -v guild-pgdata:/var/lib/postgresql/data postgres:16
+docker run -d --name guild-service --network tamagotchi-lab1 -p 8083:8083 \
+  --restart on-failure -e PORT=8083 -e DB_HOST=guild-db -e DB_PORT=5432 \
+  -e DB_NAME=guild_db -e DB_USER=guild_user -e DB_PASSWORD=<guild password> \
+  -e RUN_MIGRATIONS=true -e AUTH_MODE=mock \
+  nikvnln/tamagotchi-guild-service:0.1.0
+```
+
+Notification works the same way with `notification_db` / `notification_user`, port 8084 and `nikvnln/tamagotchi-notification-service:0.1.0`. The private READMEs also explain how to run from source with `go run`.
+
+**Verify:** run [`postman/guild-service.postman_collection.json`](postman/guild-service.postman_collection.json) (26 requests) and [`postman/notification-service.postman_collection.json`](postman/notification-service.postman_collection.json) (10 requests) top to bottom. Each collection carries its own `base_url`, `user_id` and `admin_id` variables, so no environment file is needed. Every request asserts its status. Both collections can be re-run on the same database: the Guild flow ends by disbanding its guild. Notification has no RabbitMQ in Lab 1, so its events arrive through the temporary `POST /internal/v1/dev/events`.
+
+**Lab 1 deviations (Vica's services):**
+
+| Deviation | Service | Removed when |
+| --- | --- | --- |
+| `X-Mock-User-Id` instead of JWT validation via JWKS | both | Integration lab |
+| `X-Service-Name` instead of scoped service credentials on `/internal/v1` | both | Integration lab |
+| `Idempotency-Key` accepted but not enforced (business keys still are) | both | Later lab |
+| Other services replaced by mock clients with the contract types and shared test IDs | both | Integration lab |
+| WebSocket chat and chat tickets replaced by REST `POST`/`GET /api/v1/guilds/{guild_id}/messages` | Guild | Later lab |
+| Leadership transfer not exposed; the leader can only disband | Guild | Later lab |
+| No RabbitMQ or outbox; `GuildInvited` is logged through `EventPublisher` | Guild | Later lab |
+| Temporary `POST /internal/v1/dev/events` instead of consuming `notification.events.v1` | Notification | When RabbitMQ is added |
+| Push sent synchronously through a logging Firebase mock; no delivery jobs, retries or invalid-token cleanup | Notification | Later lab |
+
 ## Repository setup and Lab 0 checklist
 
 The common repository stores shared documentation, collaboration files and Git submodule pointers. Each private service repository stores that service's README and, in later labs, implementation.
@@ -647,8 +701,8 @@ The common repository stores shared documentation, collaboration files and Git s
 | --- | --- | --- |
 | `services/battle-service` | [Ekkusuu/battle-service](https://github.com/Ekkusuu/battle-service) | Lab 1 CRUD implementation published; linked as submodule |
 | `services/tamagotchi-service` | [Ekkusuu/tamagotchi-service](https://github.com/Ekkusuu/tamagotchi-service) | Lab 1 CRUD implementation published; linked as submodule |
-| `services/guild-service` | [vikanicologlo/guild-service](https://github.com/vikanicologlo/guild-service) | Contract README published; linked as submodule |
-| `services/notification-service` | [vikanicologlo/notification-service](https://github.com/vikanicologlo/notification-service) | Contract README published; linked as submodule |
+| `services/guild-service` | [vikanicologlo/guild-service](https://github.com/vikanicologlo/guild-service) | Lab 1 implementation published (`v0.1.0`, image `0.1.0`); linked as submodule |
+| `services/notification-service` | [vikanicologlo/notification-service](https://github.com/vikanicologlo/notification-service) | Lab 1 implementation published (`v0.1.0`, image `0.1.0`); linked as submodule |
 | `services/user-management-service` | [MadalinaDev/user-management-service](https://github.com/MadalinaDev/user-management-service) | Lab 1 implementation published (`v0.1.1`); linked as submodule |
 | `services/map-service` | [MadalinaDev/map-service](https://github.com/MadalinaDev/map-service) | Lab 1 implementation published (`v0.1.1`); linked as submodule |
 | `services/monster-raid-service` | [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service) | Lab 1 implementation published (image `0.1.2`); linked as submodule |
