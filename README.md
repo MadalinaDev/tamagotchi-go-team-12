@@ -558,7 +558,7 @@ A single `postgres` container (PostGIS image) hosts all eight databases with one
 
 ## Lab 1 — Running User Management and Map
 
-Mădălina's NestJS + Prisma services follow the [team Lab 1 conventions](docs/lab-1-conventions.md). They implement the full Lab 0 contract for their endpoints, including wallet settlement rules and PostGIS proximity with one `UsersNearby` event per encounter. `AUTH_MODE=mock` selects the caller with `X-Mock-User-Id` (and `X-Service-Name` on internal routes). User Management also issues real RS256 tokens (login, refresh, logout, JWKS), which it accepts next to the mock header.
+Mădălina's NestJS + Prisma services follow the [team Lab 1 conventions](docs/lab-1-conventions.md). They implement the full Lab 0 contract for their endpoints, including wallet settlement rules and PostGIS proximity with one `UsersNearby` event per encounter. The [Lab 1 contract notes](docs/lab-1-contract-madalina.md) list what Lab 1 adds to or pins down in the contract: the new `POST /internal/v1/users/batch`, token claims, error codes and the Map decisions. `AUTH_MODE=mock` selects the caller with `X-Mock-User-Id` (and `X-Service-Name` on internal routes). User Management also issues real RS256 tokens (login, refresh, logout, JWKS), which it accepts next to the mock header.
 
 **Public Docker Hub images (public, versioned):**
 
