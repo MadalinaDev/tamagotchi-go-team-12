@@ -10,11 +10,6 @@
 # Postgres runs the scripts in ./db/init only on an empty volume. To start
 # from scratch (drops all data): docker compose down -v
 #
-# TODO(Sabina): replace sabina-dockerhub-username with your Docker Hub username
-# once your images are pushed, then delete the two `profiles:` lines so the
-# services start by default. Until then they are skipped, so that
-# `docker compose pull` / `up` work for everyone else.
-#
 # Ports, image names and database names follow docs/lab-1-conventions
 # (sections 2-4 and 10).
 
@@ -158,9 +153,7 @@ services:
 
   monster-raid-service:
     <<: *service
-    image: sabina-dockerhub-username/tamagotchi-monster-raid-service:0.1.0
-    # Skipped until the image is published (see TODO at the top).
-    profiles: ["pending-images"]
+    image: sabinapopescu/tamagotchi-monster-raid-service:0.1.2
     environment:
       <<: *service-env
       PORT: "8087"
@@ -172,9 +165,7 @@ services:
 
   package-registry-service:
     <<: *service
-    image: sabina-dockerhub-username/tamagotchi-package-registry-service:0.1.0
-    # Skipped until the image is published (see TODO at the top).
-    profiles: ["pending-images"]
+    image: sabinapopescu/tamagotchi-package-registry-service:0.1.0
     environment:
       <<: *service-env
       PORT: "8088"
