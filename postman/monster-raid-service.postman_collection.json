@@ -1,0 +1,584 @@
+{
+  "info": {
+    "name": "Monster Raid (Lab 1)",
+    "description": "tamagotchi-monster-raid-service:0.1.2 on port 8087. Public routes send X-Mock-User-Id (Alice by default); internal routes send X-Service-Name. Lab 1 has no RabbitMQ, so the first request creates a raid through the temporary POST /internal/v1/dev/raid-events. Each run uses a new schedule_id. Mocks: guild Founders (Alice, Bob, Carol), raid definition Big Slime v1 (300 HP); Alice deals 24 damage per attack.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8087"
+    },
+    {
+      "key": "user_id",
+      "value": "00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "key": "admin_id",
+      "value": "00000000-0000-4000-8000-000000000009"
+    },
+    {
+      "key": "bob_id",
+      "value": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "key": "outsider_id",
+      "value": "00000000-0000-4000-8000-0000000000ff"
+    },
+    {
+      "key": "guild_id",
+      "value": "00000000-0000-4000-8000-0000000000c1"
+    },
+    {
+      "key": "definition_id",
+      "value": "00000000-0000-4000-8000-0000000000d1"
+    },
+    {
+      "key": "schedule_id",
+      "value": ""
+    },
+    {
+      "key": "raid_id",
+      "value": ""
+    },
+    {
+      "key": "pet_id",
+      "value": ""
+    },
+    {
+      "key": "now",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.environment.get('raid_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('raid_base_url'));",
+          "if (pm.info.requestName === 'Create raid from activation event (dev)') { pm.collectionVariables.set('schedule_id', pm.variables.replaceIn('{{$guid}}')); pm.collectionVariables.set('now', new Date().toISOString()); pm.collectionVariables.set('pet_id', pm.variables.replaceIn('{{$guid}}')); }"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Raids",
+      "item": [
+        {
+          "name": "Create raid from activation event (dev)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "if (pm.response.code < 300) pm.collectionVariables.set('raid_id', pm.response.json().raid_id);",
+                  "pm.test('active with full HP', () => { const b = pm.response.json(); pm.expect(b.state).to.eql('active'); pm.expect(b.hp).to.eql(b.max_hp); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Service-Name",
+                "value": "package-registry-service"
+              }
+            ],
+            "url": "{{base_url}}/internal/v1/dev/raid-events",
+            "description": "Temporary Lab 1 endpoint (no RabbitMQ): creates exactly one raid per schedule_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"{{$guid}}\",\n  \"type\": \"RaidActivationRequested\",\n  \"version\": 1,\n  \"producer\": \"package-registry\",\n  \"occurred_at\": \"{{now}}\",\n  \"correlation_id\": \"{{schedule_id}}\",\n  \"payload\": {\n    \"schedule_id\": \"{{schedule_id}}\",\n    \"revision\": 1,\n    \"definition_id\": \"{{definition_id}}\",\n    \"definition_version\": 1,\n    \"guild_id\": \"{{guild_id}}\",\n    \"starts_at\": \"{{now}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Same activation event again (dev)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('same raid', () => pm.expect(pm.response.json().raid_id).to.eql(pm.collectionVariables.get('raid_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Service-Name",
+                "value": "package-registry-service"
+              }
+            ],
+            "url": "{{base_url}}/internal/v1/dev/raid-events",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"{{$guid}}\",\n  \"type\": \"RaidActivationRequested\",\n  \"version\": 1,\n  \"producer\": \"package-registry\",\n  \"occurred_at\": \"{{now}}\",\n  \"correlation_id\": \"{{schedule_id}}\",\n  \"payload\": {\n    \"schedule_id\": \"{{schedule_id}}\",\n    \"revision\": 1,\n    \"definition_id\": \"{{definition_id}}\",\n    \"definition_version\": 1,\n    \"guild_id\": \"{{guild_id}}\",\n    \"starts_at\": \"{{now}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Missing identity",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/raids?guild_id={{guild_id}}"
+          }
+        },
+        {
+          "name": "List guild raids",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('contains the raid', () => pm.expect(pm.response.json().items.map(r => r.raid_id)).to.include(pm.collectionVariables.get('raid_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids?guild_id={{guild_id}}&limit=20"
+          }
+        },
+        {
+          "name": "List guild raids (not a member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{outsider_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids?guild_id={{guild_id}}"
+          }
+        },
+        {
+          "name": "Get raid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids/{{raid_id}}"
+          }
+        },
+        {
+          "name": "Get raid (malformed id)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 422', () => pm.response.to.have.status(422));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });",
+                  "pm.test('request_id matches header', () => pm.expect(pm.response.json().request_id).to.eql(pm.response.headers.get('X-Request-Id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids/not-a-uuid"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Participants",
+      "item": [
+        {
+          "name": "Join raid (Alice)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids/{{raid_id}}/participants",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"primary_pet_id\": \"{{pet_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Join raid again (idempotent)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids/{{raid_id}}/participants",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"primary_pet_id\": \"{{pet_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Join raid (not a member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{outsider_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids/{{raid_id}}/participants",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"primary_pet_id\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List participants",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('one participant', () => pm.expect(pm.response.json().items.length).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids/{{raid_id}}/participants?limit=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attacks",
+      "item": [
+        {
+          "name": "Attack (Alice)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('24 damage', () => { const b = pm.response.json(); pm.expect(b.damage).to.eql(24); pm.expect(b.remaining_hp).to.eql(276); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids/{{raid_id}}/attacks",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Attack (not a participant)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{bob_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids/{{raid_id}}/attacks",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Internal",
+      "item": [
+        {
+          "name": "Internal: raid by schedule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('same raid', () => pm.expect(pm.response.json().raid_id).to.eql(pm.collectionVariables.get('raid_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Name",
+                "value": "package-registry-service"
+              }
+            ],
+            "url": "{{base_url}}/internal/v1/raids/by-schedule/{{schedule_id}}"
+          }
+        },
+        {
+          "name": "Internal: unknown schedule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Name",
+                "value": "package-registry-service"
+              }
+            ],
+            "url": "{{base_url}}/internal/v1/raids/by-schedule/11111111-1111-4111-8111-111111111111"
+          }
+        },
+        {
+          "name": "Internal: missing X-Service-Name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/internal/v1/raids/by-schedule/{{schedule_id}}"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -27,5 +27,9 @@ jobs:
       - run: docker compose pull && docker compose up -d --wait
       - run: npx --yes newman@6.2.1 run postman/battle-service.postman_collection.json --bail
       - run: npx --yes newman@6.2.1 run postman/tamagotchi-service.postman_collection.json --bail
+      - run: npx --yes newman@6.2.1 run postman/user-management-service.postman_collection.json --bail
+      - run: npx --yes newman@6.2.1 run postman/map-service.postman_collection.json --bail
+      - run: npx --yes newman@6.2.1 run postman/monster-raid-service.postman_collection.json --bail
+      - run: npx --yes newman@6.2.1 run postman/package-registry-service.postman_collection.json --bail
       - if: always()
         run: docker compose logs && docker compose down -v
