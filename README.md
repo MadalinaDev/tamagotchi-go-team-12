@@ -586,11 +586,18 @@ Sabina's NestJS + Prisma services implement the **Lab 1 subset** of the [team La
 - [`sabinapopescu/tamagotchi-monster-raid-service:0.1.2`](https://hub.docker.com/r/sabinapopescu/tamagotchi-monster-raid-service): REST on port 8087, database `raid_db` / `raid_user`
 - [`sabinapopescu/tamagotchi-package-registry-service:0.1.0`](https://hub.docker.com/r/sabinapopescu/tamagotchi-package-registry-service): REST on port 8088, database `registry_db` / `registry_user`
 
-**Requirements:** Docker Desktop (or Docker Engine), ports 8087–8088 free. Node.js is not required to run the images. Database passwords must use letters and digits only: the entrypoint puts them into `DATABASE_URL` without encoding.
+**Requirements:** Docker Desktop (or Docker Engine + Compose v2), ports 8087–8088 free. Node.js is not required to run the images. Database passwords must use letters, digits and underscores only, as for the rest of the stack: the entrypoint puts them into `DATABASE_URL` without encoding.
 
 **Environment:** `PORT`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `RUN_MIGRATIONS=true` and `AUTH_MODE=mock`. The entrypoint builds `DATABASE_URL`, runs `prisma migrate deploy`, then starts the service as a non-root user. Neither service seeds data; the Postman collections create what they need.
 
-**Run (standalone, until both services are in the common Compose file):**
+**Run with the team stack:** both services are in [docker-compose.yml](docker-compose.yml) (`monster-raid-service`, `package-registry-service`) on the shared `postgres` with `RAID_DB_PASSWORD` / `REGISTRY_DB_PASSWORD` from `.env`:
+
+```sh
+cp .env.example .env   # set all nine *_PASSWORD values
+docker compose up -d --wait
+```
+
+**Run standalone** (only these two services, each with its own Postgres):
 
 ```sh
 docker network create tamagotchi-lab1
@@ -613,9 +620,9 @@ docker run -d --name monster-raid-service --network tamagotchi-lab1 -p 8087:8087
   sabinapopescu/tamagotchi-monster-raid-service:0.1.2
 ```
 
-`--restart on-failure` retries while Postgres is still starting. In the common Compose file the same variables apply, with `DB_HOST=postgres` and the `RAID_DB_PASSWORD` / `REGISTRY_DB_PASSWORD` values from `.env`. Each service repository also ships a `docker-compose.yml` for running it with its own database.
+`--restart on-failure` retries while Postgres is still starting. Each service repository also ships a `docker-compose.yml` for running it with its own database.
 
-**Verify:** import [`postman/package-registry-service.postman_collection.json`](postman/package-registry-service.postman_collection.json) and [`postman/monster-raid-service.postman_collection.json`](postman/monster-raid-service.postman_collection.json) with `postman/local.postman_environment.json` (`registry_base_url`, `raid_base_url`) and run each top to bottom. Every endpoint has a request with an example body and status/shape assertions. The collections can be re-run on the same database. Monster Raid has no RabbitMQ in Lab 1, so its first request creates a raid through the temporary `POST /internal/v1/dev/raid-events`.
+**Verify:** import [`postman/package-registry-service.postman_collection.json`](postman/package-registry-service.postman_collection.json) and [`postman/monster-raid-service.postman_collection.json`](postman/monster-raid-service.postman_collection.json) with `postman/local.postman_environment.json` (`registry_base_url`, `raid_base_url`) and run each top to bottom. Every endpoint has a request with an example body and status/shape assertions. The collections can be re-run on the same database. GitHub Actions (Lab 1 smoke) runs both with Newman against the published images, after the Map collection. Monster Raid has no RabbitMQ in Lab 1, so its first request creates a raid through the temporary `POST /internal/v1/dev/raid-events`.
 
 **Lab 1 deviations (Sabina's services):**
 

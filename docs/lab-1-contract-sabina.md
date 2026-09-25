@@ -65,4 +65,4 @@ Game rules as in Lab 0:
 
 ## Team integration status
 
-Both images are public on Docker Hub. Both are missing from the common Compose file: the `docker-compose.yml` on `dev` currently holds `.env` content (see the PR that adds this page). They can be run standalone as described in the [README](../README.md#lab-1--running-sabinas-services). The Postman collections `postman/monster-raid-service.postman_collection.json` and `postman/package-registry-service.postman_collection.json` cover every endpoint above and pass with Newman on repeated runs.
+Both images are public on Docker Hub and run in the common Compose file as `monster-raid-service` and `package-registry-service` on the shared `postgres`. They can also run standalone, as described in the [README](../README.md#lab-1--running-sabinas-services). The Postman collections `postman/monster-raid-service.postman_collection.json` and `postman/package-registry-service.postman_collection.json` cover every endpoint above. They pass with Newman on repeated runs, and the Lab 1 smoke workflow runs both against the full stack.
