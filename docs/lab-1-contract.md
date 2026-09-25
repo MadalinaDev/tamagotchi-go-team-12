@@ -71,4 +71,4 @@ Unique starter issuance is tracked separately from live pets. Creating the pet a
 
 ## Team integration status
 
-The common Compose file runs Sava's two versioned images on the shared postgres host. It is the common deployment starting point, **not yet an eight-service deployment**. The other owners must provide their published image tags, ports, environment/DB requirements and seeds. Full team deployment remains pending until those entries are contributed and verified. Shared PR approval is also pending; a passing CI check is not a peer review.
+The common Compose file runs Sava's two versioned images together with the other six services on the shared postgres host; see [Lab 1 — Running the whole system](../README.md#lab-1--running-the-whole-system).
