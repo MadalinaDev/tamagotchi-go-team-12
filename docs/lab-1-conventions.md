@@ -26,7 +26,7 @@ Stack (as fixed in the Lab 0 README): Go for Battle, Tamagotchi, Guild and Notif
 | Monster Raid | 8087 | NestJS | tamagotchi-monster-raid-service | raid_db / raid_user |
 | Package Registry | 8088 | NestJS | tamagotchi-package-registry-service | registry_db / registry_user |
 
-Image reference: `<owner_dockerhub_username>/<image name>:0.1.0`. Each owner publishes to their own public Docker Hub repositories. Docker Hub usernames: Sava **ekkusuu**, Vica ____, Madalina ____, Sabina ____.
+Image reference: `<owner_dockerhub_username>/<image name>:0.1.0`. Each owner publishes to their own public Docker Hub repositories. Docker Hub usernames: Sava **ekkusuu**, Vica ____, Madalina **madalina060504**, Sabina ____.
 
 Lab 1 tag for every image: **0.1.0**. Fixes: 0.1.1, etc. Never rely on latest.
 
@@ -275,6 +275,9 @@ Record these in the CPR README (Sabina, Lab 1 grade 10) so that nobody mistakes 
 | Dev-only endpoints POST /internal/v1/dev/events (Notification) and POST /internal/v1/dev/raid-events (Monster Raid), active only when USE_MOCKS=true | Replace queue consumers so the flows can be tested | When RabbitMQ is added |
 | Other services are replaced by Mock\<Name>Client implementations | Grade 9 | Integration lab |
 | Guild WebSocket chat may be missing (REST history and send only) | Stretch goal | Later lab |
+| User Management and Map support only STORAGE=postgres (no memory mode) | Wallet settlement relies on row locks and constraints; Map relies on PostGIS | Not planned |
+| User Management and Map enforce Idempotency-Key on mutating routes instead of only accepting it | Follows the Lab 0 contract; their Postman collections send the header | Not a contract deviation |
+| User Management and Map images are tagged 0.1.1 | 0.1.1 is their first release that follows these conventions | — |
 
 Any other deviation must be added to this table in the same PR that introduces it.
 
