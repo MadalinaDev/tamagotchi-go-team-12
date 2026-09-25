@@ -1,0 +1,179 @@
+# Tamagotchi Go, Team 12: common deployment for Lab 1.
+#
+# Only published Docker Hub images are used (no `build:`); every image is
+# built in its private repository and pushed as <owner>/<image>:0.1.0.
+#
+# Usage:
+#   cp .env.example .env     # set the passwords (letters, digits and underscores)
+#   docker compose up -d --wait
+#
+# Postgres runs the scripts in ./db/init only on an empty volume. To start
+# from scratch (drops all data): docker compose down -v
+#
+# Ports, image names and database names follow docs/lab-1-conventions
+# (sections 2-4 and 10).
+
+name: tamagotchi-go
+
+x-service: &service
+  restart: on-failure
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+x-service-env: &service-env
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  RUN_MIGRATIONS: "true"
+  AUTH_MODE: mock
+
+services:
+  postgres:
+    # PostGIS is needed only by map-service; the same image serves all DBs.
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Read by db/init/01-create-databases.sh to create one user per service.
+      BATTLE_DB_PASSWORD: ${BATTLE_DB_PASSWORD:?set BATTLE_DB_PASSWORD in .env}
+      TAMAGOTCHI_DB_PASSWORD: ${TAMAGOTCHI_DB_PASSWORD:?set TAMAGOTCHI_DB_PASSWORD in .env}
+      GUILD_DB_PASSWORD: ${GUILD_DB_PASSWORD:?set GUILD_DB_PASSWORD in .env}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?set NOTIFICATION_DB_PASSWORD in .env}
+      USER_MANAGEMENT_DB_PASSWORD: ${USER_MANAGEMENT_DB_PASSWORD:?set USER_MANAGEMENT_DB_PASSWORD in .env}
+      MAP_DB_PASSWORD: ${MAP_DB_PASSWORD:?set MAP_DB_PASSWORD in .env}
+      RAID_DB_PASSWORD: ${RAID_DB_PASSWORD:?set RAID_DB_PASSWORD in .env}
+      REGISTRY_DB_PASSWORD: ${REGISTRY_DB_PASSWORD:?set REGISTRY_DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Published so services can also be run locally with DB_HOST=localhost.
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    healthcheck:
+      # TCP check: during init Postgres listens only on the Unix socket, so
+      # this turns healthy only after the init scripts have finished.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  battle-service:
+    <<: *service
+    image: ekkusuu/tamagotchi-battle-service:0.1.0
+    # Published for amd64 only; runs emulated on Apple Silicon.
+    platform: linux/amd64
+    environment:
+      <<: *service-env
+      PORT: "8081"
+      DB_NAME: battle_db
+      DB_USER: battle_user
+      DB_PASSWORD: ${BATTLE_DB_PASSWORD}
+      # Extra settings read by Sava's images (see PR #28).
+      STORAGE: postgres
+      DB_SSLMODE: disable
+      USE_MOCKS: "true"
+      SEED_ON_START: "true"
+    ports:
+      - "8081:8081"
+
+  tamagotchi-service:
+    <<: *service
+    image: ekkusuu/tamagotchi-tamagotchi-service:0.1.0
+    # Published for amd64 only; runs emulated on Apple Silicon.
+    platform: linux/amd64
+    environment:
+      <<: *service-env
+      PORT: "8082"
+      DB_NAME: tamagotchi_db
+      DB_USER: tamagotchi_user
+      DB_PASSWORD: ${TAMAGOTCHI_DB_PASSWORD}
+      # Extra settings read by Sava's images (see PR #28).
+      STORAGE: postgres
+      DB_SSLMODE: disable
+      USE_MOCKS: "true"
+      SEED_ON_START: "true"
+    ports:
+      - "8082:8082"
+
+  guild-service:
+    <<: *service
+    image: nikvnln/tamagotchi-guild-service:0.1.0
+    environment:
+      <<: *service-env
+      PORT: "8083"
+      DB_NAME: guild_db
+      DB_USER: guild_user
+      DB_PASSWORD: ${GUILD_DB_PASSWORD}
+    ports:
+      - "8083:8083"
+
+  notification-service:
+    <<: *service
+    image: nikvnln/tamagotchi-notification-service:0.1.0
+    environment:
+      <<: *service-env
+      PORT: "8084"
+      DB_NAME: notification_db
+      DB_USER: notification_user
+      DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+    ports:
+      - "8084:8084"
+
+  user-management-service:
+    <<: *service
+    # 0.1.1: first image that follows these conventions (DB_*, AUTH_MODE, USE_MOCKS).
+    image: madalina060504/tamagotchi-user-management-service:0.1.1
+    environment:
+      <<: *service-env
+      PORT: "8085"
+      DB_NAME: user_management_db
+      DB_USER: user_management_user
+      DB_PASSWORD: ${USER_MANAGEMENT_DB_PASSWORD}
+      USE_MOCKS: "true"
+      SEED_ON_START: "true"
+    ports:
+      - "8085:8085"
+
+  map-service:
+    <<: *service
+    image: madalina060504/tamagotchi-map-service:0.1.1
+    environment:
+      <<: *service-env
+      PORT: "8086"
+      DB_NAME: map_db
+      DB_USER: map_user
+      DB_PASSWORD: ${MAP_DB_PASSWORD}
+      USE_MOCKS: "true"
+      SEED_ON_START: "true"
+      # Used once USE_MOCKS=false (integration lab).
+      USER_MANAGEMENT_URL: http://user-management-service:8085
+    ports:
+      - "8086:8086"
+
+  monster-raid-service:
+    <<: *service
+    image: sabinapopescu/tamagotchi-monster-raid-service:0.1.2
+    environment:
+      <<: *service-env
+      PORT: "8087"
+      DB_NAME: raid_db
+      DB_USER: raid_user
+      DB_PASSWORD: ${RAID_DB_PASSWORD}
+    ports:
+      - "8087:8087"
+
+  package-registry-service:
+    <<: *service
+    image: sabinapopescu/tamagotchi-package-registry-service:0.1.0
+    environment:
+      <<: *service-env
+      PORT: "8088"
+      DB_NAME: registry_db
+      DB_USER: registry_user
+      DB_PASSWORD: ${REGISTRY_DB_PASSWORD}
+    ports:
+      - "8088:8088"
+
+volumes:
+  pgdata:

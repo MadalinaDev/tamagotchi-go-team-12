@@ -1,0 +1,454 @@
+{
+  "info": {
+    "name": "Map Lab 1 regression suite",
+    "description": "Every Map endpoint (AUTH_MODE=mock: X-Mock-User-Id). The User Management mock follows the seed: Alice (user_id) and Bob are friends, Carol has marked Bob as an enemy. Safe to run repeatedly.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.environment.get('map_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('map_base_url'));",
+          "pm.collectionVariables.set('now', new Date().toISOString());"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8086"
+    },
+    {
+      "key": "user_id",
+      "value": "00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "key": "bob_id",
+      "value": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "key": "carol_id",
+      "value": "00000000-0000-4000-8000-000000000003"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/health"
+      }
+    },
+    {
+      "name": "Missing auth is 401",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 401', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/v1/map/users"
+      }
+    },
+    {
+      "name": "Share location (Alice)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('accepted', () => pm.expect(pm.response.json().accepted).to.be.true);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/map/location",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"latitude\": 47.0105,\n  \"longitude\": 28.8638000,\n  \"accuracy_m\": 5,\n  \"recorded_at\": \"{{now}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Share location (Bob, 1 km away)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('accepted', () => pm.expect(pm.response.json().accepted).to.be.true);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{bob_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/map/location",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"latitude\": 47.0105,\n  \"longitude\": 28.8769743,\n  \"accuracy_m\": 5,\n  \"recorded_at\": \"{{now}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Share location (Carol, 3 m from Alice)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('accepted', () => pm.expect(pm.response.json().accepted).to.be.true);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{carol_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/map/location",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"latitude\": 47.0105,\n  \"longitude\": 28.8638395,\n  \"accuracy_m\": 5,\n  \"recorded_at\": \"{{now}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Visible users for Alice",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const users = Object.fromEntries(pm.response.json().users.map(u => [u.user.user_id, u]));",
+              "pm.test('Bob is a friend at any distance', () => pm.expect(users[pm.collectionVariables.get('bob_id')].relationship).to.eql('friend'));",
+              "pm.test('Carol is a nearby stranger', () => { const c = users[pm.collectionVariables.get('carol_id')]; pm.expect(c.relationship).to.eql('unknown'); pm.expect(c.distance_m).to.be.below(6); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/map/users"
+      }
+    },
+    {
+      "name": "Visible users for Carol",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const users = Object.fromEntries(pm.response.json().users.map(u => [u.user.user_id, u]));",
+              "pm.test('Bob is an enemy', () => pm.expect(users[pm.collectionVariables.get('bob_id')].relationship).to.eql('enemy'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{carol_id}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/map/users"
+      }
+    },
+    {
+      "name": "Older update is not applied",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('older', new Date(Date.now() - 60000).toISOString());"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('accepted false', () => pm.expect(pm.response.json().accepted).to.be.false);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/map/location",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"latitude\": 47.0105,\n  \"longitude\": 28.8644587,\n  \"accuracy_m\": 5,\n  \"recorded_at\": \"{{older}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Invalid latitude is 422",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 422', () => pm.response.to.have.status(422));",
+              "pm.test('error code VALIDATION_FAILED', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_FAILED'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/map/location",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"latitude\": 120,\n  \"longitude\": 28.8638,\n  \"accuracy_m\": 5,\n  \"recorded_at\": \"{{now}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Stale timestamp is 422",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('stale', new Date(Date.now() - 600000).toISOString());"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 422', () => pm.response.to.have.status(422));",
+              "pm.test('error code INVALID_RECORDED_AT', () => pm.expect(pm.response.json().code).to.eql('INVALID_RECORDED_AT'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/map/location",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"latitude\": 47.0105,\n  \"longitude\": 28.8638000,\n  \"accuracy_m\": 5,\n  \"recorded_at\": \"{{stale}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Stop sharing (Carol)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 204', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{carol_id}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/map/location"
+      }
+    },
+    {
+      "name": "Carol is no longer visible",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Carol gone', () => pm.expect(pm.response.json().users.map(u => u.user.user_id)).to.not.include(pm.collectionVariables.get('carol_id')));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Mock-User-Id",
+            "value": "{{user_id}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/map/users"
+      }
+    }
+  ]
+}

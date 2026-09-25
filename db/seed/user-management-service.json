@@ -1,0 +1,26 @@
+{
+  "_comment": "Reference copy of the user-management-service Lab 1 self-seed (src/seed/seed-data.ts in the private repo). Applied by the service itself when SEED_ON_START=true and the users table is empty. Fixed IDs come from section 5 of docs/lab-1-conventions.md. All seeded accounts use the demo password 'password123'.",
+  "users": [
+    { "user_id": "00000000-0000-4000-8000-000000000001", "username": "alice", "email": "alice@example.com", "display_name": "Alice", "is_admin": false },
+    { "user_id": "00000000-0000-4000-8000-000000000002", "username": "bob", "email": "bob@example.com", "display_name": "Bob", "is_admin": false },
+    { "user_id": "00000000-0000-4000-8000-000000000003", "username": "carol", "email": "carol@example.com", "display_name": "Carol", "is_admin": false },
+    { "user_id": "00000000-0000-4000-8000-000000000009", "username": "admin", "email": "admin@example.com", "display_name": "Admin", "is_admin": true }
+  ],
+  "friendships": [
+    { "friendship_id": "00000000-0000-4000-8000-0000000000e1", "requester_id": "00000000-0000-4000-8000-000000000001", "recipient_id": "00000000-0000-4000-8000-000000000002", "status": "accepted" }
+  ],
+  "enemy_markers": [
+    { "user_id": "00000000-0000-4000-8000-000000000003", "enemy_id": "00000000-0000-4000-8000-000000000002" }
+  ],
+  "wallet_operation_id": "00000000-0000-4000-8000-0000000000f1",
+  "wallets": [
+    { "user_id": "00000000-0000-4000-8000-000000000001", "currency": "global", "package_id": null, "balance": 100 },
+    { "user_id": "00000000-0000-4000-8000-000000000002", "currency": "global", "package_id": null, "balance": 100 },
+    { "user_id": "00000000-0000-4000-8000-000000000003", "currency": "global", "package_id": null, "balance": 100 },
+    { "user_id": "00000000-0000-4000-8000-000000000009", "currency": "global", "package_id": null, "balance": 0 },
+    { "user_id": "00000000-0000-4000-8000-000000000001", "currency": "local", "package_id": "00000000-0000-4000-8000-0000000000a1", "balance": 20 },
+    { "user_id": "00000000-0000-4000-8000-000000000001", "currency": "local", "package_id": "00000000-0000-4000-8000-0000000000a2", "balance": 5 },
+    { "user_id": "00000000-0000-4000-8000-000000000002", "currency": "local", "package_id": "00000000-0000-4000-8000-0000000000a1", "balance": 10 },
+    { "user_id": "00000000-0000-4000-8000-000000000003", "currency": "local", "package_id": "00000000-0000-4000-8000-0000000000a2", "balance": 15 }
+  ]
+}

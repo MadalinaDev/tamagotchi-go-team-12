@@ -1,0 +1,1163 @@
+{
+  "info": {
+    "name": "Package Registry (Lab 1)",
+    "description": "tamagotchi-package-registry-service:0.1.0 on port 8088. Public routes send X-Mock-User-Id (Alice by default; admin routes add X-Mock-Roles: admin). Internal routes send X-Service-Name. Run top to bottom: later requests reuse ids saved by earlier ones. Package names get a per-run suffix so the collection can be re-run on the same database.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8088"
+    },
+    {
+      "key": "user_id",
+      "value": "00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "key": "admin_id",
+      "value": "00000000-0000-4000-8000-000000000009"
+    },
+    {
+      "key": "bob_id",
+      "value": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "key": "guild_id",
+      "value": "00000000-0000-4000-8000-0000000000c1"
+    },
+    {
+      "key": "run_id",
+      "value": ""
+    },
+    {
+      "key": "package_id",
+      "value": ""
+    },
+    {
+      "key": "definition_id",
+      "value": ""
+    },
+    {
+      "key": "schedule_id",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.environment.get('registry_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('registry_base_url'));",
+          "if (pm.info.requestName === 'Missing identity') pm.collectionVariables.set('run_id', String(Date.now()));"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Packages",
+      "item": [
+        {
+          "name": "Missing identity",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/v1/packages"
+          }
+        },
+        {
+          "name": "Create package (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "if (pm.response.code < 300) pm.collectionVariables.set('package_id', pm.response.json().package_id);",
+                  "pm.test('definition v1', () => pm.expect(pm.response.json().current_definition_version).to.eql(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{admin_id}}"
+              },
+              {
+                "key": "X-Mock-Roles",
+                "value": "admin"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/packages",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"PetHub {{run_id}}\",\n  \"app_version\": \"1.0.0\",\n  \"description\": \"Pets with hunger and happiness\",\n  \"developer_id\": \"{{user_id}}\",\n  \"stats\": [\n    {\"key\": \"hunger\", \"min\": 0, \"max\": 100, \"initial\": 20, \"bonus_when\": \"lte\", \"threshold\": 20, \"combat_bonus\": 0.05},\n    {\"key\": \"happiness\", \"min\": 0, \"max\": 100, \"initial\": 80, \"bonus_when\": \"gte\", \"threshold\": 80, \"combat_bonus\": 0.1}\n  ],\n  \"sprite_urls\": [\"https://cdn.example.com/pethub/idle.png\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create package (not admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/packages",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nope\",\n  \"app_version\": \"1.0.0\",\n  \"description\": \"x\",\n  \"developer_id\": \"00000000-0000-4000-8000-000000000001\",\n  \"stats\": [\n    {\n      \"key\": \"hunger\",\n      \"min\": 0,\n      \"max\": 100,\n      \"initial\": 50,\n      \"bonus_when\": \"gte\",\n      \"threshold\": 80,\n      \"combat_bonus\": 0.05\n    }\n  ],\n  \"sprite_urls\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create package (duplicate name)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{admin_id}}"
+              },
+              {
+                "key": "X-Mock-Roles",
+                "value": "admin"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/packages",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"pethub {{run_id}}\",\n  \"app_version\": \"1.0.0\",\n  \"description\": \"Same name, different case\",\n  \"developer_id\": \"{{user_id}}\",\n  \"stats\": [{\"key\": \"hunger\", \"min\": 0, \"max\": 100, \"initial\": 20, \"bonus_when\": \"lte\", \"threshold\": 20, \"combat_bonus\": 0.05}],\n  \"sprite_urls\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List packages",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('page shape', () => { const b = pm.response.json(); pm.expect(b.items).to.be.an('array'); pm.expect(b).to.have.property('next_cursor'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/packages?limit=20"
+          }
+        },
+        {
+          "name": "Get package",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/packages/{{package_id}}"
+          }
+        },
+        {
+          "name": "Update package (developer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('description updated', () => pm.expect(pm.response.json().description).to.eql('Updated by the developer'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/packages/{{package_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated by the developer\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update package (not developer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{bob_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/packages/{{package_id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Bob is not the developer\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Care definitions",
+      "item": [
+        {
+          "name": "Create care definition (developer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('next version', () => pm.expect(pm.response.json().version).to.eql(2));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/packages/{{package_id}}/care-definitions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stats\": [\n    {\n      \"key\": \"hunger\",\n      \"min\": 0,\n      \"max\": 100,\n      \"initial\": 20,\n      \"bonus_when\": \"lte\",\n      \"threshold\": 20,\n      \"combat_bonus\": 0.05\n    },\n    {\n      \"key\": \"happiness\",\n      \"min\": 0,\n      \"max\": 100,\n      \"initial\": 80,\n      \"bonus_when\": \"gte\",\n      \"threshold\": 80,\n      \"combat_bonus\": 0.1\n    }\n  ],\n  \"sprite_urls\": [\n    \"https://cdn.example.com/pethub/idle-v2.png\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create care definition (invalid)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 422', () => pm.response.to.have.status(422));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/packages/{{package_id}}/care-definitions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stats\": [\n    {\n      \"key\": \"hunger\",\n      \"min\": 50,\n      \"max\": 10,\n      \"initial\": 50,\n      \"bonus_when\": \"gte\",\n      \"threshold\": 80,\n      \"combat_bonus\": 0.5\n    },\n    {\n      \"key\": \"hunger\",\n      \"min\": 0,\n      \"max\": 100,\n      \"initial\": 50,\n      \"bonus_when\": \"gte\",\n      \"threshold\": 80,\n      \"combat_bonus\": 0.05\n    }\n  ],\n  \"sprite_urls\": [\n    \"http://insecure.example.com/a.png\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get care definition",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/packages/{{package_id}}/care-definitions/2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Registrations",
+      "item": [
+        {
+          "name": "Register (Bob)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{bob_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/packages/{{package_id}}/registrations",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Register again (Bob)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{bob_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/packages/{{package_id}}/registrations",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "My registrations (Bob)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('contains the package', () => pm.expect(pm.response.json().registrations.map(r => r.package_id)).to.include(pm.collectionVariables.get('package_id')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{bob_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/package-registrations/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Raid definitions",
+      "item": [
+        {
+          "name": "Create raid definition",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "if (pm.response.code < 300) pm.collectionVariables.set('definition_id', pm.response.json().definition_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{admin_id}}"
+              },
+              {
+                "key": "X-Mock-Roles",
+                "value": "admin"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raid-definitions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"monster\": {\n    \"name\": \"Big Slime\",\n    \"description\": \"A wobbling green blob.\",\n    \"sprite_urls\": [\n      \"https://cdn.example.com/raids/big-slime.png\"\n    ],\n    \"max_hp\": 300,\n    \"attack\": 10,\n    \"defense\": 2,\n    \"weak_to\": [\n      \"flame\"\n    ],\n    \"resistant_to\": [\n      \"water\"\n    ],\n    \"special\": \"none\"\n  },\n  \"duration_seconds\": 3600,\n  \"participant_limit\": 20,\n  \"currency_reward\": 50,\n  \"xp_reward\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create raid definition (invalid)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 422', () => pm.response.to.have.status(422));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{admin_id}}"
+              },
+              {
+                "key": "X-Mock-Roles",
+                "value": "admin"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raid-definitions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"monster\": {\n    \"name\": \"Big Slime\",\n    \"description\": \"A wobbling green blob.\",\n    \"sprite_urls\": [\n      \"https://cdn.example.com/raids/big-slime.png\"\n    ],\n    \"max_hp\": 0,\n    \"attack\": 10,\n    \"defense\": 2,\n    \"weak_to\": [\n      \"flame\"\n    ],\n    \"resistant_to\": [\n      \"flame\"\n    ],\n    \"special\": \"none\"\n  },\n  \"duration_seconds\": 30,\n  \"participant_limit\": 101,\n  \"currency_reward\": 50,\n  \"xp_reward\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create raid definition (not admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raid-definitions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"monster\": {\n    \"name\": \"Big Slime\",\n    \"description\": \"A wobbling green blob.\",\n    \"sprite_urls\": [\n      \"https://cdn.example.com/raids/big-slime.png\"\n    ],\n    \"max_hp\": 300,\n    \"attack\": 10,\n    \"defense\": 2,\n    \"weak_to\": [\n      \"flame\"\n    ],\n    \"resistant_to\": [\n      \"water\"\n    ],\n    \"special\": \"none\"\n  },\n  \"duration_seconds\": 3600,\n  \"participant_limit\": 20,\n  \"currency_reward\": 50,\n  \"xp_reward\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "New raid definition version",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('version 2', () => pm.expect(pm.response.json().version).to.eql(2));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{admin_id}}"
+              },
+              {
+                "key": "X-Mock-Roles",
+                "value": "admin"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raid-definitions/{{definition_id}}/versions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"monster\": {\n    \"name\": \"Big Slime\",\n    \"description\": \"A wobbling green blob.\",\n    \"sprite_urls\": [\n      \"https://cdn.example.com/raids/big-slime.png\"\n    ],\n    \"max_hp\": 400,\n    \"attack\": 10,\n    \"defense\": 2,\n    \"weak_to\": [\n      \"flame\"\n    ],\n    \"resistant_to\": [\n      \"water\"\n    ],\n    \"special\": \"none\"\n  },\n  \"duration_seconds\": 3600,\n  \"participant_limit\": 20,\n  \"currency_reward\": 50,\n  \"xp_reward\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List raid definitions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{admin_id}}"
+              },
+              {
+                "key": "X-Mock-Roles",
+                "value": "admin"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raid-definitions?limit=20"
+          }
+        },
+        {
+          "name": "Get raid definition version",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{admin_id}}"
+              },
+              {
+                "key": "X-Mock-Roles",
+                "value": "admin"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raid-definitions/{{definition_id}}/versions/1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Raid schedules",
+      "item": [
+        {
+          "name": "Create raid schedule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "if (pm.response.code < 300) pm.collectionVariables.set('schedule_id', pm.response.json().schedule_id);",
+                  "pm.test('scheduled', () => pm.expect(pm.response.json().state).to.eql('scheduled'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{admin_id}}"
+              },
+              {
+                "key": "X-Mock-Roles",
+                "value": "admin"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raid-schedules",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"definition_id\": \"{{definition_id}}\",\n  \"definition_version\": 2,\n  \"guild_id\": \"{{guild_id}}\",\n  \"starts_at\": \"2026-12-01T18:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create raid schedule (unknown guild)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 422', () => pm.response.to.have.status(422));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{admin_id}}"
+              },
+              {
+                "key": "X-Mock-Roles",
+                "value": "admin"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raid-schedules",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"definition_id\": \"{{definition_id}}\",\n  \"definition_version\": 1,\n  \"guild_id\": \"11111111-1111-4111-8111-111111111111\",\n  \"starts_at\": \"2026-12-01T18:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List raid schedules",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{admin_id}}"
+              },
+              {
+                "key": "X-Mock-Roles",
+                "value": "admin"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raid-schedules?limit=20"
+          }
+        },
+        {
+          "name": "Activate raid schedule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 202', () => pm.response.to.have.status(202));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('activated', () => pm.expect(pm.response.json().state).to.eql('activated'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{admin_id}}"
+              },
+              {
+                "key": "X-Mock-Roles",
+                "value": "admin"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raid-schedules/{{schedule_id}}/activate",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Activate again",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{admin_id}}"
+              },
+              {
+                "key": "X-Mock-Roles",
+                "value": "admin"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raid-schedules/{{schedule_id}}/activate",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cancel raid schedule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 202', () => pm.response.to.have.status(202));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('cancelled', () => pm.expect(pm.response.json().state).to.eql('cancelled'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Mock-User-Id",
+                "value": "{{admin_id}}"
+              },
+              {
+                "key": "X-Mock-Roles",
+                "value": "admin"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raid-schedules/{{schedule_id}}/cancel",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Internal",
+      "item": [
+        {
+          "name": "Internal: user registrations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Name",
+                "value": "guild-service"
+              }
+            ],
+            "url": "{{base_url}}/internal/v1/users/{{bob_id}}/package-registrations"
+          }
+        },
+        {
+          "name": "Internal: care definition",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Name",
+                "value": "tamagotchi-service"
+              }
+            ],
+            "url": "{{base_url}}/internal/v1/packages/{{package_id}}/care-definitions/1"
+          }
+        },
+        {
+          "name": "Internal: package",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Name",
+                "value": "tamagotchi-service"
+              }
+            ],
+            "url": "{{base_url}}/internal/v1/packages/{{package_id}}"
+          }
+        },
+        {
+          "name": "Internal: raid definition version",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Service-Name",
+                "value": "monster-raid-service"
+              }
+            ],
+            "url": "{{base_url}}/internal/v1/raid-definitions/{{definition_id}}/versions/2"
+          }
+        },
+        {
+          "name": "Internal: missing X-Service-Name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.be.a('string'); pm.expect(b.request_id).to.be.a('string'); pm.expect(b.details).to.be.an('array'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/internal/v1/packages/{{package_id}}"
+          }
+        }
+      ]
+    }
+  ]
+}

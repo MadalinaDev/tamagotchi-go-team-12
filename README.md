@@ -2,7 +2,7 @@
 
 Lab 0 plans a microservice backend where independently developed pet-care apps share users, creatures, battles, guilds and raids. Each app (a **package**) can define its own care statistics; global services provide interoperability without forcing all packages to use the same hunger/happiness model.
 
-**Status:** architecture and communication-contract proposal for implementation in later labs. The service allocation and technology split below are confirmed; the concrete gameplay constants and API design are the initial baseline for team review. This repository does not yet contain runnable services.
+**Status:** architecture and communication-contract proposal for implementation in later labs. The service allocation and technology split below are confirmed; the concrete gameplay constants and API design are the initial baseline for team review. Sava's Battle and Tamagotchi services are implemented for Lab 1 and runnable via [docker-compose.yml](docker-compose.yml) — see [Lab 1 — Running Sava's services](#lab-1--running-savas-services). Sabina's Monster Raid and Package Registry services are published for Lab 1 — see [Lab 1 — Running Sabina's services](#lab-1--running-sabinas-services).
 
 ## Contents
 
@@ -12,6 +12,9 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Communication contract](#communication-contract)
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
+- [Lab 1 — Running Sava's services](#lab-1--running-savas-services)
+- [Lab 1 — Running User Management and Map](#lab-1--running-user-management-and-map)
+- [Lab 1 — Running Sabina's services](#lab-1--running-sabinas-services)
 - [Repository setup and Lab 0 checklist](#repository-setup-and-lab-0-checklist)
 
 ## Team and service boundaries
@@ -527,20 +530,129 @@ This section defines the team policy. **Documented rules are not proof that GitH
 
 Private repos admit the professor(s), not teammates, as required by the lab. Peer review of shared contracts happens in this public repo; the private owner applies the agreed contract in their own README. Do not require an unavailable teammate approval in private repo settings.
 
+## Lab 1 — Running Sava's services
+
+Sava's Go services implement the independent **Lab 1 CRUD subset** following the [team Lab 1 conventions](docs/lab-1-conventions.md), with the implemented surface recorded in the [Lab 1 contract addendum](docs/lab-1-contract.md). The Lab 0 combat, JWT, reservations, settlement and messaging sections above remain a target design. `X-Mock-User-Id` selects a simulated caller and does not verify identity; internal routes require `X-Service-Name`. Real integration is not implemented.
+
+**Public Docker Hub images (public, versioned):**
+
+- [`ekkusuu/tamagotchi-battle-service:0.1.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-battle-service) — REST on port 8081
+- [`ekkusuu/tamagotchi-tamagotchi-service:0.1.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-tamagotchi-service) — REST on port 8082
+
+**Requirements:** Docker Desktop (or Docker Engine + Compose v2), ports 8081–8082 free. Go is not required for the Compose path. Copy `.env.example` to `.env` and replace the placeholders with random passwords using letters, digits and underscores only (they are interpolated into SQL by `db/init`). Missing passwords stop Compose instead of silently using committed defaults. Service ports bind to localhost for this mock demo.
+
+**Run everything (images only, no `build:` directives):**
+
+```sh
+cp .env.example .env   # set all nine *_PASSWORD values
+docker compose up -d --wait
+```
+
+A single `postgres` container (PostGIS image) hosts all eight databases with one `pgdata` volume; `db/init/01-create-databases.sh` creates databases, owners and the Map PostGIS extension on first start. Data survives `docker compose down` / `up`; use `down -v` only to wipe everything. Each service applies its versioned migrations (`RUN_MIGRATIONS=true`) and seeds itself (`SEED_ON_START=true`) only when its tables are empty — Alice/Bob starters and one battle from the fixed convention IDs. Reference copies live in [`db/seed/`](db/seed); the mechanism is documented for Madalina's `db/seed.md`.
+
+**Verify:** Postman collections in [`postman/`](postman/) assert every response, including CRUD, pagination, stale versions, duplicate starters after deletion, internal Tamagotchi endpoints, invalid IDs, structured errors and mock authorization. Import `postman/local.postman_environment.json` (fixed seed IDs, per-service base URLs) and run top to bottom. GitHub Actions runs both collections with Newman against published images on every Compose-related PR.
+
+**Tests:** each private repo runs `go test ./...` (unit tests with in-memory stores, mock clients and sqlmock adapter tests, no external services needed). Real PostgreSQL integration tests run only against a disposable database whose name ends in `_test`. Per the updated rubric the 80% coverage gate and the run/test helper scripts were removed; see [audit evidence and remaining team work](docs/lab-1-audit.md).
+
+**Team requirement still pending:** this common Compose file contains Sava's two services on the shared postgres host. The other six owners must contribute their published image tags and runtime settings for the full-team deployment. PR #28 also requires a teammate's review/merge; CI passing alone is not approval.
+
+## Lab 1 — Running User Management and Map
+
+Mădălina's NestJS + Prisma services follow the [team Lab 1 conventions](docs/lab-1-conventions.md). They implement the full Lab 0 contract for their endpoints, including wallet settlement rules and PostGIS proximity with one `UsersNearby` event per encounter. The [Lab 1 contract notes](docs/lab-1-contract-madalina.md) list what Lab 1 adds to or pins down in the contract: the new `POST /internal/v1/users/batch`, token claims, error codes and the Map decisions. `AUTH_MODE=mock` selects the caller with `X-Mock-User-Id` (and `X-Service-Name` on internal routes). User Management also issues real RS256 tokens (login, refresh, logout, JWKS), which it accepts next to the mock header.
+
+**Public Docker Hub images (public, versioned):**
+
+- [`madalina060504/tamagotchi-user-management-service:0.1.1`](https://hub.docker.com/r/madalina060504/tamagotchi-user-management-service) — REST on port 8085
+- [`madalina060504/tamagotchi-map-service:0.1.1`](https://hub.docker.com/r/madalina060504/tamagotchi-map-service) — REST on port 8086
+
+`0.1.1` is the first release that follows the conventions (`DB_*`, `AUTH_MODE`, `USE_MOCKS`, `SEED_ON_START`). The earlier `0.1.0` images under other names predate them and are not used here.
+
+**Requirements:** Docker Desktop (on Windows with WSL 2) or Docker Engine + Compose v2, and ports 5432 and 8085–8086 free. Node.js is not needed for the Compose path. Both services run inside the shared stack started by `docker compose up -d --wait` above; `db/init` creates `user_management_db` and `map_db` (with PostGIS).
+
+**Data:** each container applies its Prisma migrations on start. User Management seeds Alice, Bob, Carol and admin (password `password123`), the Alice–Bob friendship, Carol's enemy marker on Bob and wallet balances, but only while its users table is empty. Map has nothing to seed because locations are live data. See [`db/seed.md`](db/seed.md).
+
+**Mocks (`USE_MOCKS=true`):** User Management replaces Package Registry (registrations and raid definitions consistent with the seed). Map replaces User Management (relationships and profiles consistent with the seed). Events go to a transactional outbox and are logged instead of published to RabbitMQ.
+
+**Verify:** import `postman/local.postman_environment.json` and run `postman/user-management-service.postman_collection.json` (28 requests) and `postman/map-service.postman_collection.json` (12 requests) top to bottom. Every request asserts its status and body, and both collections can run repeatedly against the same data. The Lab 1 smoke workflow runs them with Newman as well.
+
+**Differences from the conventions:** PostgreSQL-only storage (no `STORAGE=memory`), and `Idempotency-Key` is enforced on mutating routes as the contract requires. Both are listed in [section 14 of the conventions](docs/lab-1-conventions.md#14-known-deviations-from-the-lab-0-contract-in-lab-1). Private READMEs document the endpoints, configuration and error codes.
+
+## Lab 1 — Running Sabina's services
+
+Sabina's NestJS + Prisma services implement the **Lab 1 subset** of the [team Lab 1 conventions](docs/lab-1-conventions.md) (§13). The [Lab 1 contract notes](docs/lab-1-contract-sabina.md) list what differs from the Lab 0 contract above. `X-Mock-User-Id` selects a simulated caller (`X-Mock-Roles: admin` for a global admin); internal routes require `X-Service-Name`. Other services are mocked.
+
+**Public Docker Hub images (versioned):**
+
+- [`sabinapopescu/tamagotchi-monster-raid-service:0.1.2`](https://hub.docker.com/r/sabinapopescu/tamagotchi-monster-raid-service): REST on port 8087, database `raid_db` / `raid_user`
+- [`sabinapopescu/tamagotchi-package-registry-service:0.1.0`](https://hub.docker.com/r/sabinapopescu/tamagotchi-package-registry-service): REST on port 8088, database `registry_db` / `registry_user`
+
+**Requirements:** Docker Desktop (or Docker Engine + Compose v2), ports 8087–8088 free. Node.js is not required to run the images. Database passwords must use letters, digits and underscores only, as for the rest of the stack: the entrypoint puts them into `DATABASE_URL` without encoding.
+
+**Environment:** `PORT`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `RUN_MIGRATIONS=true` and `AUTH_MODE=mock`. The entrypoint builds `DATABASE_URL`, runs `prisma migrate deploy`, then starts the service as a non-root user. Neither service seeds data; the Postman collections create what they need.
+
+**Run with the team stack:** both services are in [docker-compose.yml](docker-compose.yml) (`monster-raid-service`, `package-registry-service`) on the shared `postgres` with `RAID_DB_PASSWORD` / `REGISTRY_DB_PASSWORD` from `.env`:
+
+```sh
+cp .env.example .env   # set all nine *_PASSWORD values
+docker compose up -d --wait
+```
+
+**Run standalone** (only these two services, each with its own Postgres):
+
+```sh
+docker network create tamagotchi-lab1
+docker run -d --name registry-db --network tamagotchi-lab1 -e POSTGRES_DB=registry_db \
+  -e POSTGRES_USER=registry_user -e POSTGRES_PASSWORD=<registry password> \
+  -v registry-pgdata:/var/lib/postgresql/data postgres:16
+docker run -d --name raid-db --network tamagotchi-lab1 -e POSTGRES_DB=raid_db \
+  -e POSTGRES_USER=raid_user -e POSTGRES_PASSWORD=<raid password> \
+  -v raid-pgdata:/var/lib/postgresql/data postgres:16
+
+docker run -d --name package-registry-service --network tamagotchi-lab1 -p 8088:8088 \
+  --restart on-failure -e PORT=8088 -e DB_HOST=registry-db -e DB_PORT=5432 \
+  -e DB_NAME=registry_db -e DB_USER=registry_user -e DB_PASSWORD=<registry password> \
+  -e RUN_MIGRATIONS=true -e AUTH_MODE=mock \
+  sabinapopescu/tamagotchi-package-registry-service:0.1.0
+docker run -d --name monster-raid-service --network tamagotchi-lab1 -p 8087:8087 \
+  --restart on-failure -e PORT=8087 -e DB_HOST=raid-db -e DB_PORT=5432 \
+  -e DB_NAME=raid_db -e DB_USER=raid_user -e DB_PASSWORD=<raid password> \
+  -e RUN_MIGRATIONS=true -e AUTH_MODE=mock \
+  sabinapopescu/tamagotchi-monster-raid-service:0.1.2
+```
+
+`--restart on-failure` retries while Postgres is still starting. Each service repository also ships a `docker-compose.yml` for running it with its own database.
+
+**Verify:** import [`postman/package-registry-service.postman_collection.json`](postman/package-registry-service.postman_collection.json) and [`postman/monster-raid-service.postman_collection.json`](postman/monster-raid-service.postman_collection.json) with `postman/local.postman_environment.json` (`registry_base_url`, `raid_base_url`) and run each top to bottom. Every endpoint has a request with an example body and status/shape assertions. The collections can be re-run on the same database. GitHub Actions (Lab 1 smoke) runs both with Newman against the published images, after the Map collection. Monster Raid has no RabbitMQ in Lab 1, so its first request creates a raid through the temporary `POST /internal/v1/dev/raid-events`.
+
+**Lab 1 deviations (Sabina's services):**
+
+| Deviation | Service | Removed when |
+| --- | --- | --- |
+| `X-Mock-User-Id` / `X-Mock-Roles` instead of JWT validation via JWKS | both | Integration lab |
+| `X-Service-Name` instead of scoped service credentials on `/internal/v1` | both | Integration lab |
+| `Idempotency-Key` accepted but not enforced (business operation ids still are) | both | Later lab |
+| No RabbitMQ or outbox; events are logged through `EventPublisher` | both | Later lab |
+| Other services replaced by mock clients with the contract types and shared test IDs | both | Integration lab |
+| Temporary `POST /internal/v1/dev/raid-events` instead of consuming `raid.scheduling.v1` | Monster Raid | When RabbitMQ is added |
+| No timer worker: an overdue raid fails lazily on the next request that loads it | Monster Raid | Later lab |
+| No `429` attack rate limit; no cancellation tombstones (`RaidCancellationRequested` not consumed); settlement retries only on the next request | Monster Raid | Later labs |
+| Staff/moderator endpoints skipped; the package developer is the only package staff | Package Registry | Later lab |
+| No persisted scheduler; schedules are activated only through `POST …/activate` | Package Registry | Later lab |
+
 ## Repository setup and Lab 0 checklist
 
 The common repository stores shared documentation, collaboration files and Git submodule pointers. Each private service repository stores that service's README and, in later labs, implementation.
 
 | Service path | Repository | Setup state |
 | --- | --- | --- |
-| `services/battle-service` | [Ekkusuu/battle-service](https://github.com/Ekkusuu/battle-service) | Contract README published; linked as submodule |
-| `services/tamagotchi-service` | [Ekkusuu/tamagotchi-service](https://github.com/Ekkusuu/tamagotchi-service) | Contract README published; linked as submodule |
+| `services/battle-service` | [Ekkusuu/battle-service](https://github.com/Ekkusuu/battle-service) | Lab 1 CRUD implementation published; linked as submodule |
+| `services/tamagotchi-service` | [Ekkusuu/tamagotchi-service](https://github.com/Ekkusuu/tamagotchi-service) | Lab 1 CRUD implementation published; linked as submodule |
 | `services/guild-service` | [vikanicologlo/guild-service](https://github.com/vikanicologlo/guild-service) | Contract README published; linked as submodule |
 | `services/notification-service` | [vikanicologlo/notification-service](https://github.com/vikanicologlo/notification-service) | Contract README published; linked as submodule |
-| `services/user-management-service` | [MadalinaDev/user-management-service](https://github.com/MadalinaDev/user-management-service) | URL supplied; contents unverified from this account (private, teammates not invited per lab rules); README + submodule pending owner action |
-| `services/map-service` | [MadalinaDev/map-service](https://github.com/MadalinaDev/map-service) | URL supplied; contents unverified from this account (private, teammates not invited per lab rules); README + submodule pending owner action |
-| `services/monster-raid-service` | [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service) | Contract README published; linked as submodule |
-| `services/package-registry-service` | [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service) | Contract README published; linked as submodule |
+| `services/user-management-service` | [MadalinaDev/user-management-service](https://github.com/MadalinaDev/user-management-service) | Lab 1 implementation published (`v0.1.1`); linked as submodule |
+| `services/map-service` | [MadalinaDev/map-service](https://github.com/MadalinaDev/map-service) | Lab 1 implementation published (`v0.1.1`); linked as submodule |
+| `services/monster-raid-service` | [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service) | Lab 1 implementation published (image `0.1.2`); linked as submodule |
+| `services/package-registry-service` | [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service) | Lab 1 implementation published (image `0.1.0`); linked as submodule |
 
 Do not add fake submodules or copy private source into public folders. A real submodule needs a remote URL and an existing commit. To add one from the common repo after the service owner has pushed its README:
 
