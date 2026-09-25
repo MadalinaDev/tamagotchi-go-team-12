@@ -2,7 +2,7 @@
 
 Lab 0 plans a microservice backend where independently developed pet-care apps share users, creatures, battles, guilds and raids. Each app (a **package**) can define its own care statistics; global services provide interoperability without forcing all packages to use the same hunger/happiness model.
 
-**Status:** architecture and communication-contract proposal for implementation in later labs. The service allocation and technology split below are confirmed; the concrete gameplay constants and API design are the initial baseline for team review. Sava's Battle and Tamagotchi services are implemented for Lab 1 and runnable via [docker-compose.yml](docker-compose.yml) — see [Lab 1 — Running Sava's services](#lab-1--running-savas-services). Sabina's Monster Raid and Package Registry services are published for Lab 1 — see [Lab 1 — Running Sabina's services](#lab-1--running-sabinas-services).
+**Status:** architecture and communication-contract proposal for implementation in later labs. The service allocation and technology split below are confirmed; the concrete gameplay constants and API design are the initial baseline for team review. **Lab 1:** all eight services are implemented, published on Docker Hub and started together by [docker-compose.yml](docker-compose.yml). See [Lab 1 — Running the whole system](#lab-1--running-the-whole-system) for the images, requirements, run steps and contract updates.
 
 ## Contents
 
@@ -12,6 +12,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Communication contract](#communication-contract)
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
+- [Lab 1 — Running the whole system](#lab-1--running-the-whole-system)
 - [Lab 1 — Running Sava's services](#lab-1--running-savas-services)
 - [Lab 1 — Running User Management and Map](#lab-1--running-user-management-and-map)
 - [Lab 1 — Running Sabina's services](#lab-1--running-sabinas-services)
@@ -531,6 +532,118 @@ This section defines the team policy. **Documented rules are not proof that GitH
 
 Private repos admit the professor(s), not teammates, as required by the lab. Peer review of shared contracts happens in this public repo; the private owner applies the agreed contract in their own README. Do not require an unavailable teammate approval in private repo settings.
 
+## Lab 1 — Running the whole system
+
+All eight services are published on Docker Hub and started together by one Compose file. This section is the entry point for Lab 1. The owner sections below give per-service details.
+
+### Docker Hub images
+
+All images are public and pinned to an explicit version tag (never `latest`).
+
+| Service | Owner | Image | Port | Database | Lab 1 contract notes | Private repository |
+| --- | --- | --- | --- | --- | --- | --- |
+| Battle | Sava | [`ekkusuu/tamagotchi-battle-service:0.1.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-battle-service) | 8081 | `battle_db` | [lab-1-contract.md](docs/lab-1-contract.md) | [Ekkusuu/battle-service](https://github.com/Ekkusuu/battle-service) |
+| Tamagotchi | Sava | [`ekkusuu/tamagotchi-tamagotchi-service:0.1.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-tamagotchi-service) | 8082 | `tamagotchi_db` | [lab-1-contract.md](docs/lab-1-contract.md) | [Ekkusuu/tamagotchi-service](https://github.com/Ekkusuu/tamagotchi-service) |
+| Guild | Vica | [`nikvnln/tamagotchi-guild-service:0.1.1`](https://hub.docker.com/r/nikvnln/tamagotchi-guild-service) | 8083 | `guild_db` | [lab-1-contract-vica.md](docs/lab-1-contract-vica.md) | [vikanicologlo/guild-service](https://github.com/vikanicologlo/guild-service) |
+| Notification | Vica | [`nikvnln/tamagotchi-notification-service:0.1.1`](https://hub.docker.com/r/nikvnln/tamagotchi-notification-service) | 8084 | `notification_db` | [lab-1-contract-vica.md](docs/lab-1-contract-vica.md) | [vikanicologlo/notification-service](https://github.com/vikanicologlo/notification-service) |
+| User Management | Mădălina | [`madalina060504/tamagotchi-user-management-service:0.1.1`](https://hub.docker.com/r/madalina060504/tamagotchi-user-management-service) | 8085 | `user_management_db` | [lab-1-contract-madalina.md](docs/lab-1-contract-madalina.md) | [MadalinaDev/user-management-service](https://github.com/MadalinaDev/user-management-service) |
+| Map | Mădălina | [`madalina060504/tamagotchi-map-service:0.1.1`](https://hub.docker.com/r/madalina060504/tamagotchi-map-service) | 8086 | `map_db` (PostGIS) | [lab-1-contract-madalina.md](docs/lab-1-contract-madalina.md) | [MadalinaDev/map-service](https://github.com/MadalinaDev/map-service) |
+| Monster Raid | Sabina | [`sabinapopescu/tamagotchi-monster-raid-service:0.1.2`](https://hub.docker.com/r/sabinapopescu/tamagotchi-monster-raid-service) | 8087 | `raid_db` | [lab-1-contract-sabina.md](docs/lab-1-contract-sabina.md) | [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service) |
+| Package Registry | Sabina | [`sabinapopescu/tamagotchi-package-registry-service:0.1.0`](https://hub.docker.com/r/sabinapopescu/tamagotchi-package-registry-service) | 8088 | `registry_db` | [lab-1-contract-sabina.md](docs/lab-1-contract-sabina.md) | [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service) |
+
+The database is the public image [`postgis/postgis:16-3.4`](https://hub.docker.com/r/postgis/postgis): one container serves all eight databases, and PostGIS is needed only by Map.
+
+### Requirements
+
+- **Docker:** Docker Desktop (macOS, or Windows with WSL 2) or Docker Engine with the Compose v2 plugin (`docker compose version`). Nothing else is needed: no Go, Node.js or database install, and no access to the private repositories.
+- **Free ports:** 5432 (Postgres, configurable with `POSTGRES_HOST_PORT` in `.env`) and 8081–8088.
+- **Resources:** about 2 GB of memory and about 4 GB of disk space for Docker. The four NestJS images and `postgis/postgis` are about 0.5–0.85 GB each. Internet access is needed for the first `docker compose up`.
+- **Apple Silicon:** Vica's images are multi-arch. The other six images and `postgis/postgis` are published for amd64 only. Compose pins them to `platform: linux/amd64`, and Docker Desktop runs them through emulation (Rosetta). This is slower to start but needs no action.
+- **Passwords:** `.env` holds nine passwords (Postgres superuser plus one per service). Use letters, digits and underscores only, because they are put into SQL and connection URLs unencoded. `.env` is git-ignored; only `.env.example` with placeholders is committed.
+
+### Run
+
+```sh
+git clone https://github.com/MadalinaDev/tamagotchi-go-team-12.git
+cd tamagotchi-go-team-12
+cp .env.example .env          # replace every change_me
+docker compose up -d --wait   # pulls the images, creates the databases, starts all services
+docker compose ps             # every service with a healthcheck shows (healthy)
+```
+
+- **Startup order:** `postgres` starts first. On an empty `pgdata` volume, [`db/init/01-create-databases.sh`](db/init/01-create-databases.sh) creates the eight databases and their owners, and enables PostGIS in `map_db`. Services wait for Postgres to be healthy.
+- **Services:** each service applies its own migrations. With `SEED_ON_START=true`, a service seeds itself only while its tables are empty. Reference copies of every seed are in [`db/seed/`](db/seed), and [`db/seed.md`](db/seed.md) explains the mechanism.
+- **Data** is kept in the `pgdata` volume across `docker compose down` / `up`. `docker compose down -v` wipes it, and the next start re-creates and re-seeds everything.
+- **Mocks:** all services run with `AUTH_MODE=mock` and `USE_MOCKS=true`. Callers are selected with `X-Mock-User-Id`, internal routes need `X-Service-Name`, and cross-service calls go to mock clients that use the contract types and the shared test IDs.
+
+### Verify
+
+Every service has a Postman collection in [`postman/`](postman/), and [`postman/local.postman_environment.json`](postman/local.postman_environment.json) has the base URLs and shared test IDs. Import a collection with the environment and run it top to bottom in the Collection Runner, or use Newman:
+
+```sh
+for s in battle tamagotchi guild notification user-management map package-registry monster-raid; do
+  npx newman run postman/$s-service.postman_collection.json -e postman/local.postman_environment.json
+done
+```
+
+| Collection | Requests |
+| --- | --- |
+| battle-service | 13 |
+| tamagotchi-service | 19 |
+| guild-service | 31 |
+| notification-service | 12 |
+| user-management-service | 28 |
+| map-service | 12 |
+| package-registry-service | 31 |
+| monster-raid-service | 16 |
+
+Every request asserts its status, and many also check the body. The collections can be re-run on the same data. The [Lab 1 smoke workflow](.github/workflows/lab1-smoke.yml) starts the same stack in GitHub Actions and runs all eight collections with Newman.
+
+### Contract updates for Lab 1
+
+The Lab 0 contract above remains the target design. What Lab 1 implements, pins down or leaves out is recorded per owner, and those pages are the contract changes to review:
+
+- [Sava — Battle, Tamagotchi](docs/lab-1-contract.md)
+- [Vica — Guild, Notification](docs/lab-1-contract-vica.md)
+- [Mădălina — User Management, Map](docs/lab-1-contract-madalina.md)
+- [Sabina — Monster Raid, Package Registry](docs/lab-1-contract-sabina.md)
+
+The shared decisions are in the [Lab 1 conventions](docs/lab-1-conventions.md): ports, image names, environment variables, seed IDs and mocking rules. The main additions to the Lab 0 contract are:
+
+- `GET /health` on every service;
+- User Management's `POST /internal/v1/users/batch`;
+- Guild's REST chat route `POST /api/v1/guilds/{guild_id}/messages`;
+- the temporary `/internal/v1/dev/...` event routes.
+
+**Known deviations from the Lab 0 contract** (conventions §14; the owner sections below list the service-specific details):
+
+| Deviation | Services | Removed when |
+| --- | --- | --- |
+| `X-Mock-User-Id` / `X-Mock-Roles` instead of JWT validation via JWKS | all | Integration lab |
+| `X-Service-Name` instead of scoped service credentials on `/internal/v1` | all | Integration lab |
+| Other services replaced by `Mock<Name>Client` implementations with the contract types (`USE_MOCKS=true`) | all | Integration lab |
+| No RabbitMQ; events go through an `EventPublisher` that logs them (User Management and Map through an outbox) | all producers | Later lab |
+| Temporary `POST /internal/v1/dev/events` (Notification) and `POST /internal/v1/dev/raid-events` (Monster Raid) instead of queue consumers | Notification, Monster Raid | When RabbitMQ is added |
+| `Idempotency-Key` accepted but not enforced; business operation IDs still are | all except User Management and Map, which enforce it | Later lab |
+| WebSocket chat replaced by REST send and history; no leadership transfer | Guild | Later lab |
+| Combat engine, reservations and settlements not exposed yet (CRUD subset) | Battle, Tamagotchi | Later lab |
+| No timer workers or schedulers (lazy raid expiry, manual schedule activation), no attack rate limit, no staff/moderator endpoints | Monster Raid, Package Registry | Later lab |
+| Push sent synchronously through a logging Firebase mock; no delivery jobs or retries | Notification | Later lab |
+
+### Lab 1 grade mapping
+
+| Grade | Requirement | Where |
+| --- | --- | --- |
+| 2 | Two CRUD services per person, pushed to GitHub | Private repositories in the image table, linked as submodules under [`services/`](services/) |
+| 3 | Run instructions in the private READMEs | Each private README (run script, Docker, environment, tests) |
+| 4 | Postman collection per service in the CPR | [`postman/`](postman/) (8 collections plus the shared environment) |
+| 5 | Dockerised services in public Docker Hub repositories with version tags | Image table above |
+| 6 | Database in Docker with volumes; credentials not committed | `postgres` + `pgdata` volume in [docker-compose.yml](docker-compose.yml); [`.env.example`](.env.example) only |
+| 7 | Populate-if-empty seeds and one Compose file with images only, plus DB scripts in the CPR | [docker-compose.yml](docker-compose.yml) (no `build:`), [`db/init/`](db/init), [`db/seed/`](db/seed), [`db/seed.md`](db/seed.md) |
+| 8 | Unit tests with ≥80% coverage | Private READMEs state the command and the coverage number |
+| 9 | Mocks for the services each one depends on, with the contract types | `Mock<Name>Client` per dependency (conventions §7); listed in each contract note |
+| 10 | Contract updated where needed; Docker Hub links and run requirements in the CPR README | This section and the four contract notes |
+
 ## Lab 1 — Running Sava's services
 
 Sava's Go services implement the independent **Lab 1 CRUD subset** following the [team Lab 1 conventions](docs/lab-1-conventions.md), with the implemented surface recorded in the [Lab 1 contract addendum](docs/lab-1-contract.md). The Lab 0 combat, JWT, reservations, settlement and messaging sections above remain a target design. `X-Mock-User-Id` selects a simulated caller and does not verify identity; internal routes require `X-Service-Name`. Real integration is not implemented.
@@ -555,7 +668,7 @@ A single `postgres` container (PostGIS image) hosts all eight databases with one
 
 **Tests:** each private repo runs `go test ./...` (unit tests with in-memory stores, mock clients and sqlmock adapter tests, no external services needed). Real PostgreSQL integration tests run only against a disposable database whose name ends in `_test`. Per the updated rubric the 80% coverage gate and the run/test helper scripts were removed; see [audit evidence and remaining team work](docs/lab-1-audit.md).
 
-**Team requirement still pending:** this common Compose file contains Sava's two services on the shared postgres host. The other six owners must contribute their published image tags and runtime settings for the full-team deployment. PR #28 also requires a teammate's review/merge; CI passing alone is not approval.
+**Team deployment:** the common Compose file now runs all eight services; see [Lab 1 — Running the whole system](#lab-1--running-the-whole-system).
 
 ## Lab 1 — Running User Management and Map
 
