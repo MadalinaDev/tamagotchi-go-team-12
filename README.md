@@ -824,6 +824,7 @@ The common repository stores shared documentation, collaboration files and Git s
 | `services/map-service` | [MadalinaDev/map-service](https://github.com/MadalinaDev/map-service) | Lab 1 implementation published (`v0.1.1`); linked as submodule |
 | `services/monster-raid-service` | [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service) | Lab 1 implementation published (image `0.1.2`); linked as submodule |
 | `services/package-registry-service` | [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service) | Lab 1 implementation published (image `0.1.0`); linked as submodule |
+| `services/gateway-service` | [MadalinaDev/gateway-service](https://github.com/MadalinaDev/gateway-service) | Lab 2: repository set up (README, PR template, PR policy, `main`/`dev`); professor and all teammates invited; linked as submodule |
 
 Do not add fake submodules or copy private source into public folders. A real submodule needs a remote URL and an existing commit. To add one from the common repo after the service owner has pushed its README:
 

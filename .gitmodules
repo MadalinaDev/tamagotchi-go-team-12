@@ -22,3 +22,6 @@
 [submodule "services/monster-raid-service"]
 	path = services/monster-raid-service
 	url = https://github.com/sabinapopescu/monster-raid-service.git
+[submodule "services/gateway-service"]
+	path = services/gateway-service
+	url = https://github.com/MadalinaDev/gateway-service.git
