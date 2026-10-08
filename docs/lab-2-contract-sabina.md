@@ -73,7 +73,14 @@ The Raid collection has a new **Live updates (SSE)** folder. It creates an alrea
 
 ## CI and images
 
-Each service repository has `.github/workflows/ci.yml`. Pull requests into `dev` and `main` run the type check and unit tests. A push to `main` also builds the image and pushes `sabinapopescu/tamagotchi-<service>:<package.json version>` and `:latest` to Docker Hub. The version is `0.3.0` for Lab 2. The workflow needs the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets.
+Each service repository has `.github/workflows/ci.yml`. Pull requests into `dev` and `main` run the type check and unit tests. A push to `main` also builds the image and pushes `sabinapopescu/tamagotchi-<service>:<package.json version>` and `:latest` to Docker Hub. The version is `0.3.0` for Lab 2. The workflow reads the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets.
+
+The Lab 2 releases were published by that workflow, and `:latest` has the same digest as `:0.3.0`:
+
+| Image | Release | Submodule |
+| --- | --- | --- |
+| [`sabinapopescu/tamagotchi-monster-raid-service:0.3.0`](https://hub.docker.com/r/sabinapopescu/tamagotchi-monster-raid-service) | sabinapopescu/monster-raid-service#3 | `services/monster-raid-service` at `38ba02a` |
+| [`sabinapopescu/tamagotchi-package-registry-service:0.3.0`](https://hub.docker.com/r/sabinapopescu/tamagotchi-package-registry-service) | sabinapopescu/package-registry-service#4 | `services/package-registry-service` at `bb12099` |
 
 ## Open items
 
@@ -82,4 +89,3 @@ Each service repository has `.github/workflows/ci.yml`. Pull requests into `dev`
 | Run `USE_MOCKS=false` in the compose file | `gateway-service` in the compose file, and the internal routes above served by their owners |
 | The service credential that Postman sends in `service_token`, and that services send in `SERVICE_TOKEN` | The gateway's service authorization (Mădălina) |
 | Postman and the smoke workflow reach these services only through the gateway | `gateway-service` in the compose file; the Lab 1 smoke workflow cannot run these two collections until then |
-| Bump the `services/` submodules to the Lab 2 merges | The service PRs being merged |
