@@ -356,6 +356,7 @@ RaidAttack = {attack_id: Id, raid_id: Id, user_id: Id, damage: Int, remaining_hp
 | --- | --- | --- | --- |
 | `GET /api/v1/raids` | User | Pagination; `guild_id: Id` | `200 Page<Raid>`; must be current guild member |
 | `GET /api/v1/raids/{raid_id}` | Current guild member or recorded participant | None | `200 Raid` |
+| `GET /api/v1/raids/{raid_id}/events` | Current guild member or recorded participant | None | `200 text/event-stream`: `raid` snapshot and state changes, `attack` with `remaining_hp`, `ping` every 15 s; ends when the raid is terminal (added in Lab 2, see [Sabina's Lab 2 notes](docs/lab-2-contract-sabina.md)) |
 | `POST /api/v1/raids/{raid_id}/participants` | Current guild member | `{primary_pet_id: Id}` | `201 RaidParticipant`; reserve selected primary and verify capacity |
 | `GET /api/v1/raids/{raid_id}/participants` | Current guild member or participant | Pagination | `200 Page<RaidParticipant>` |
 | `POST /api/v1/raids/{raid_id}/attacks` | Participant who remains a guild member | `{}` | `201 RaidAttack`; max one accepted attack per second per user, otherwise `429` |
