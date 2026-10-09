@@ -543,9 +543,11 @@ Private repos admit the professor(s), not teammates, as required by the lab. Pee
 Lab 2 puts the Python Gateway in front of every REST call: port **8080** is the
 only REST entry point. The Gateway validates `Authorization: Bearer <JWT>`
 (User Management RS256 via JWKS), strips it, and forwards trusted identity
-headers plus `X-Gateway-Secret`. Migrated services (`Battle`, `Tamagotchi`)
-run image `0.3.0` with `AUTH_MODE=gateway`, `USE_MOCKS=false`, a 5 s task
-timeout and a 50-task concurrency limit; their REST ports are internal-only.
+headers plus `X-Gateway-Secret`. Migrated services (`Battle`, `Tamagotchi`
+`0.3.0` with `AUTH_MODE=gateway`; `Monster Raid`, `Package Registry` `0.3.1`)
+trust only those headers, call each other only through the Gateway, and have
+a 5 s task timeout and a 50-task concurrency limit; their REST ports are
+internal-only.
 The full rules are in [docs/lab-2-conventions.md](docs/lab-2-conventions.md).
 
 Sava's part is done and verified: Gateway ([MadalinaDev/gateway-service](https://github.com/MadalinaDev/gateway-service),
@@ -554,6 +556,16 @@ Sava's Battle/Tamagotchi routes), Battle and Tamagotchi `0.3.0` images
 `ekkusuu/tamagotchi-tamagotchi-service:0.3.0`, both + `latest`), full combat
 engine and pet reservation/settlement, CI publishing on merge to `main`.
 
+Sabina's part is done and verified: the Gateway's Monster Raid and Package
+Registry routes and its task-limit middleware (MadalinaDev/gateway-service#3,
+connection-pool fix in #5), Monster Raid and Package Registry `0.3.1`
+(`sabinapopescu/tamagotchi-monster-raid-service:0.3.1`,
+`sabinapopescu/tamagotchi-package-registry-service:0.3.1`, both + `latest`),
+live raid HP over SSE through the Gateway, the Package Registry seed, and CI
+publishing on merge to `main`. Both services call Guild, User Management and
+each other through the Gateway; the remaining mocks are listed in
+[docs/lab-2-contract-sabina.md](docs/lab-2-contract-sabina.md).
+
 Run and verify (`.env` needs the Lab 2 tokens/secrets from `.env.example`):
 
 ```sh
@@ -561,13 +573,15 @@ docker compose up -d --wait
 curl http://localhost:8080/health
 npx newman run postman/battle-service.postman_collection.json
 npx newman run postman/tamagotchi-service.postman_collection.json
+npx newman run postman/monster-raid-service.postman_collection.json --env-var "service_token=$RAID_SERVICE_TOKEN"
+npx newman run postman/package-registry-service.postman_collection.json --env-var "service_token=$REGISTRY_SERVICE_TOKEN"
 ```
 
 Both collections log in as the seeded users (`alice@example.com` /
 `password123`, seeded by User Management) and exercise CRUD plus the
 challenge/decline and selection flows through the Gateway. Full battle
-accept → settlement additionally needs Package Registry `0.3.0` to seed the
-convention packages and registrations (pending Sabina); Guild chat tickets
+accept → settlement relies on the convention packages and registrations that
+Package Registry `0.3.1` seeds (`SEED_ON_START=true`); Guild chat tickets
 need Guild `0.3.0` (pending Vica).
 
 ## Lab 1 — Running the whole system

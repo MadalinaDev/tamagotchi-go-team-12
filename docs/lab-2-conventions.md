@@ -27,8 +27,12 @@ are marked; where this page is stricter (error semantics), HTTP semantics win.
 - Trusted package backends identify as `package:<package_uuid>`; Tamagotchi
   binds care updates to the pet's package.
 - Task timeout **5 s** (`504 TASK_TIMEOUT`); max **50** concurrent tasks per
-  service and Gateway. Saturation returns **429** with `Retry-After` (HTTP
-  semantics; stricter than the draft's 503). Upstream outage → `503`,
+  service and Gateway. Saturation returns **503**
+  `TOO_MANY_CONCURRENT_TASKS` with `Retry-After: 1`, as in the team draft
+  (a temporarily overloaded server, RFC 9110 §15.6.4; 429 is for a client
+  that sent too many requests). The Gateway (since gateway-service#3),
+  Monster Raid and Package Registry answer 503; services that still answer
+  429 should switch. Upstream outage → `503`,
   upstream timeout → `504`. Errors use the contract envelope with UUID
   `request_id` and `details: []`.
 - Guild WebSocket: client tickets through the Gateway; `GET .../ws` returns a
