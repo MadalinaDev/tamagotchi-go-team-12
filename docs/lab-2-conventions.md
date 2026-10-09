@@ -59,5 +59,23 @@ are marked; where this page is stricter (error semantics), HTTP semantics win.
   packages (`PetHub`, `MoodPets`) with care definitions and user
   registrations: pet creation and reservation snapshots reject unknown
   packages. Registry `0.3.0` must provide them.
-- Guild WebSocket negotiation is implemented in the Gateway; the live Guild
-  `0.1.1` image has no chat tickets yet (Vica).
+- Guild WebSocket negotiation is implemented in the Gateway; Guild `0.3.0`
+  serves the chat tickets and the socket (see Vica status).
+
+## Vica status
+
+- Guild and Notification `0.3.0` (+ `latest`, amd64 and arm64) are published
+  by each repository's CI on merge to `main`; details in
+  [lab-2-contract-vica.md](lab-2-contract-vica.md).
+- Both read the Gateway identity headers and require `X-Gateway-Secret`
+  (Guild's port 8083 is public for the socket, so forged identity headers sent
+  straight to it are rejected); Notification is `expose:` only.
+- All outbound calls go through the Gateway with the service token:
+  Guild → User Management, Package Registry and Notification (`GuildInvited`),
+  Notification → Guild.
+- Guild WebSocket chat: single-use 30 s tickets through the Gateway, the
+  Gateway's `ws_url`, then a direct socket with `chat.send` / `chat.ack` /
+  `chat.message` / `chat.error` and a 30 s heartbeat.
+- Task controls: 5 s (`504 TASK_TIMEOUT`) and 50 concurrent tasks, answered
+  with **503** `TOO_MANY_CONCURRENT_TASKS` and `Retry-After: 1`, as the rule
+  above requires.
