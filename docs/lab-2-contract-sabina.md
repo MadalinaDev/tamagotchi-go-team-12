@@ -1,13 +1,15 @@
 # Lab 2 implemented contract — Sabina
 
-This addendum describes **tamagotchi-monster-raid-service:0.3.0** and **tamagotchi-package-registry-service:0.3.0**, the Lab 2 versions of Monster Raid and Package Registry. They implement the per-service items of the Lab 2 conventions (section 3). Everything in the [Lab 1 page](lab-1-contract-sabina.md) still applies unless this page says otherwise. Owners of affected services: please review the sections that concern you.
+This addendum describes **tamagotchi-monster-raid-service:0.3.1** and **tamagotchi-package-registry-service:0.3.1**, the Lab 2 versions of Monster Raid and Package Registry. They implement the per-service items of the Lab 2 conventions (section 3). Everything in the [Lab 1 page](lab-1-contract-sabina.md) still applies unless this page says otherwise. Owners of affected services: please review the sections that concern you.
 
 ## Behind the gateway (both services)
 
 - **Reachability.** In [`docker-compose.yml`](../docker-compose.yml) both services use `expose:` instead of `ports:`. They are reachable from `gateway-service` on the compose network, but not from the host. Clients use `http://localhost:8080` (the gateway).
 - **Users.** The services no longer read `X-Mock-User-Id` / `X-Mock-Roles`, and `AUTH_MODE` is gone. The gateway validates `Authorization: Bearer <JWT>`, does not forward it, and sets `X-Auth-User-Id` (the token subject, a UUID) and `X-Auth-Roles` (comma-separated). The `admin` role is the global admin. A missing or non-UUID `X-Auth-User-Id` returns `401`, and a missing role returns `403`.
 - **Services.** `/internal/v1` routes require `X-Service-Name`, which the gateway sets for service callers. Without it they return `401`.
+- **Gateway secret (0.3.1).** With `GATEWAY_SECRET` set, every request must carry the gateway's matching `X-Gateway-Secret`, checked before anything else, otherwise `401`. The comparison is constant-time. Empty means not checked, which is the compose default until the gateway runs there.
 - **Outgoing calls.** Calls to other services go to `GATEWAY_URL` (`http://gateway-service:8080`), never to another service's host. Every call sends `X-Service-Name: monster-raid` or `X-Service-Name: package-registry`, plus `SERVICE_TOKEN` as `Authorization: Bearer` when it is set. Each attempt has a 2 s timeout, with one retry for reads and idempotent commands. An unreachable dependency becomes `503 DEPENDENCY_UNAVAILABLE`, and business errors keep the dependency's status and code.
+- **Seed (Package Registry 0.3.1).** With `SEED_ON_START=true` (set in compose), Package Registry seeds PetHub `…00a1` and MoodPets `…00a2` with care definitions v1, the registrations Alice → both, Bob → PetHub, Carol → MoodPets, and Big Slime `…00d1` v1. It only seeds empty tables (see [`db/seed.md`](../db/seed.md)). Tamagotchi and Battle need these packages to create and reserve pets.
 - **Mocks.** `USE_MOCKS=true` (the compose default for now) keeps the Lab 1 in-process mocks. With `USE_MOCKS=false`, `MOCK_DEPENDENCIES` keeps single dependencies mocked, e.g. `MOCK_DEPENDENCIES=tamagotchi` while Tamagotchi does not serve reservations and settlements.
 
 ## Task timeout and concurrent task limit (both services)
@@ -73,20 +75,32 @@ The Raid collection has a new **Live updates (SSE)** folder. It creates an alrea
 
 ## CI and images
 
-Each service repository has `.github/workflows/ci.yml`. Pull requests into `dev` and `main` run the type check and unit tests. A push to `main` also builds the image and pushes `sabinapopescu/tamagotchi-<service>:<package.json version>` and `:latest` to Docker Hub. The version is `0.3.0` for Lab 2. The workflow reads the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets.
+Each service repository has `.github/workflows/ci.yml`. Pull requests into `dev` and `main` run the type check and unit tests. A push to `main` also builds the image and pushes `sabinapopescu/tamagotchi-<service>:<package.json version>` and `:latest` to Docker Hub. The version is `0.3.x` for Lab 2. The workflow reads the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets.
 
-The Lab 2 releases were published by that workflow, and `:latest` has the same digest as `:0.3.0`:
+The Lab 2 releases were published by that workflow. `:latest` has the same digest as the newest one:
 
-| Image | Release | Submodule |
-| --- | --- | --- |
-| [`sabinapopescu/tamagotchi-monster-raid-service:0.3.0`](https://hub.docker.com/r/sabinapopescu/tamagotchi-monster-raid-service) | sabinapopescu/monster-raid-service#3 | `services/monster-raid-service` at `38ba02a` |
-| [`sabinapopescu/tamagotchi-package-registry-service:0.3.0`](https://hub.docker.com/r/sabinapopescu/tamagotchi-package-registry-service) | sabinapopescu/package-registry-service#4 | `services/package-registry-service` at `bb12099` |
+| Image | Release | Submodule | Adds |
+| --- | --- | --- | --- |
+| [`sabinapopescu/tamagotchi-monster-raid-service:0.3.1`](https://hub.docker.com/r/sabinapopescu/tamagotchi-monster-raid-service) | sabinapopescu/monster-raid-service#6 | `services/monster-raid-service` at `f152462` | gateway secret check |
+| [`sabinapopescu/tamagotchi-package-registry-service:0.3.1`](https://hub.docker.com/r/sabinapopescu/tamagotchi-package-registry-service) | sabinapopescu/package-registry-service#6 | `services/package-registry-service` at `67bc3cf` | seed, gateway secret check |
+| `sabinapopescu/tamagotchi-monster-raid-service:0.3.0` | sabinapopescu/monster-raid-service#3 | — | first Lab 2 release |
+| `sabinapopescu/tamagotchi-package-registry-service:0.3.0` | sabinapopescu/package-registry-service#4 | — | first Lab 2 release |
+
+## Gateway changes for these services
+
+MadalinaDev/gateway-service#3 (Sabina's gateway part: Raid/Registry routes and the task-limit middleware):
+
+- The concurrent task limit answers `503 TOO_MANY_CONCURRENT_TASKS` with `Retry-After: 1` (was 429), as in section 1 of the Lab 2 conventions and in these services.
+- An open SSE stream gives its task slot back once its headers are sent, so long-lived raid streams cannot block other requests.
+- The upstream connection pool is no longer capped by the task limit. Before, as many open streams as the limit made every other request time out (504).
+- Tests for every Monster Raid / Package Registry route and service-to-service call, plus an end-to-end run of the gateway image in front of both 0.3.1 images.
 
 ## Open items
 
 | Item | Depends on |
 | --- | --- |
-| Run `USE_MOCKS=false` in the compose file | `gateway-service` in the compose file, and the internal routes above served by their owners |
+| Run `USE_MOCKS=false` in the compose file. Monster Raid → Package Registry through the gateway already works end to end (see MadalinaDev/gateway-service#3). | `gateway-service` in the compose file, and the internal routes above served by their owners |
+| Set `GATEWAY_SECRET`, `RAID_SERVICE_TOKEN` and `REGISTRY_SERVICE_TOKEN` in `.env` / CI | `gateway-service` in the compose file with the same secret and `INTERNAL_SERVICE_TOKENS` (`monster-raid=…`, `package-registry=…`) |
 | The service credential that Postman sends in `service_token`, and that services send in `SERVICE_TOKEN` | The gateway's service authorization (Mădălina) |
 | Postman reaches these services only through the gateway. Until `gateway-service` is in the compose file, the smoke workflow runs [`.github/smoke/sabina-services-probe.js`](../.github/smoke/sabina-services-probe.js) inside the compose network instead of the two collections. The probe checks the `X-Auth-*` / `X-Service-Name` rules, the admin route and the SSE stream, and fails if 8087/8088 are published on the host. | `gateway-service` in the compose file (the collections then run automatically) |
 | Admins recognised through the gateway (`X-Auth-Roles: admin`). User Management's access tokens (0.1.1) carry only `sub`, `iss`, `aud`, `iat`, `exp` and `jti`, with no roles, so the gateway cannot derive `X-Auth-Roles` from the token alone. Until then, admin-only Registry routes answer `403` through the gateway. | A roles claim in User Management's access token, or a role lookup in the gateway (Mădălina) |
