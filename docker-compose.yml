@@ -94,6 +94,8 @@ services:
         monster-raid=${RAID_SERVICE_TOKEN:?set RAID_SERVICE_TOKEN in .env},
         package-registry=${REGISTRY_SERVICE_TOKEN:?set REGISTRY_SERVICE_TOKEN in .env}
       GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
+      # Interim bridge until User Management emits role claims (seed admin ID).
+      GATEWAY_ADMIN_USER_IDS: ${GATEWAY_ADMIN_USER_IDS:-00000000-0000-4000-8000-000000000009}
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
     ports:
