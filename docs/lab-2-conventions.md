@@ -9,10 +9,9 @@ are marked; where this page is stricter (error semantics), HTTP semantics win.
 ## Gateway
 
 - Python gateway, port **8080**, image
-  `madalina060504/tamagotchi-gateway-service:0.3.0` (+ `latest`). Only REST
-  port published to the host (Guild keeps its port for direct WebSocket).
-  Until Madalina publishes it, Compose uses the identical code as
-  `ekkusuu/tamagotchi-gateway-service:0.3.0` (temporary, same digest source).
+  `madalina060504/tamagotchi-gateway-service:0.3.1` (+ `latest`), published
+  by the gateway repository's CI on merge to `main`. Only REST port published
+  to the host (Guild keeps its port for direct WebSocket).
 - All client-to-service and service-to-service REST goes through the Gateway.
   Migrated services use `expose:` instead of `ports:`.
 - Authorization is validated **only** at the Gateway and never forwarded:

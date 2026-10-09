@@ -61,9 +61,8 @@ services:
     restart: unless-stopped
 
   gateway-service:
-    # TEMPORARY: Sava's build of the merged gateway code, published so CI can
-    # run until Madalina publishes madalina060504/tamagotchi-gateway-service:0.3.0.
-    image: ekkusuu/tamagotchi-gateway-service:0.3.0
+    # 0.3.1: published by the gateway repository's CI (gateway-service#9).
+    image: madalina060504/tamagotchi-gateway-service:0.3.1
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     depends_on:
