@@ -69,6 +69,8 @@ Settlement and reservation commands carry a UUID `Idempotency-Key`, which the ga
 
 ## Postman
 
+With `gateway-service` in the compose file, the smoke workflow runs both collections through the gateway, with `service_token` set to `RAID_SERVICE_TOKEN` / `REGISTRY_SERVICE_TOKEN`. Without a gateway it falls back to [`.github/smoke/sabina-services-probe.js`](../.github/smoke/sabina-services-probe.js) inside the compose network.
+
 [`postman/monster-raid-service.postman_collection.json`](../postman/monster-raid-service.postman_collection.json) and [`postman/package-registry-service.postman_collection.json`](../postman/package-registry-service.postman_collection.json) now target the gateway (`gateway_base_url` in the shared environment). The first request of a run logs Alice, Bob and the admin in through `POST /api/v1/auth/login` (seed password `password123`). The Raid collection also registers a fresh outsider. Requests then send `Authorization: Bearer <access token>`. Internal requests send the service credential from the `service_token` environment variable.
 
 The Raid collection has a new **Live updates (SSE)** folder. It creates an already-ended raid, checks that its stream answers `200 text/event-stream` with one `raid` snapshot and closes, and checks that a non-member gets a JSON `403`.
@@ -99,8 +101,5 @@ MadalinaDev/gateway-service#3 (Sabina's gateway part: Raid/Registry routes and t
 
 | Item | Depends on |
 | --- | --- |
-| Run `USE_MOCKS=false` in the compose file. Monster Raid → Package Registry through the gateway already works end to end (see MadalinaDev/gateway-service#3). | `gateway-service` in the compose file, and the internal routes above served by their owners |
-| Set `GATEWAY_SECRET`, `RAID_SERVICE_TOKEN` and `REGISTRY_SERVICE_TOKEN` in `.env` / CI | `gateway-service` in the compose file with the same secret and `INTERNAL_SERVICE_TOKENS` (`monster-raid=…`, `package-registry=…`) |
-| The service credential that Postman sends in `service_token`, and that services send in `SERVICE_TOKEN` | The gateway's service authorization (Mădălina) |
-| Postman reaches these services only through the gateway. Until `gateway-service` is in the compose file, the smoke workflow runs [`.github/smoke/sabina-services-probe.js`](../.github/smoke/sabina-services-probe.js) inside the compose network instead of the two collections. The probe checks the `X-Auth-*` / `X-Service-Name` rules, the admin route and the SSE stream, and fails if 8087/8088 are published on the host. | `gateway-service` in the compose file (the collections then run automatically) |
-| Admins recognised through the gateway (`X-Auth-Roles: admin`). User Management's access tokens (0.1.1) carry only `sub`, `iss`, `aud`, `iat`, `exp` and `jti`, with no roles, so the gateway cannot derive `X-Auth-Roles` from the token alone. Until then, admin-only Registry routes answer `403` through the gateway. | A roles claim in User Management's access token, or a role lookup in the gateway (Mădălina) |
+| Run `USE_MOCKS=false` in the compose file. Monster Raid → Package Registry through the gateway already works end to end (see MadalinaDev/gateway-service#3). | The internal routes above served by their owners and checked in this stack |
+| Admins recognised from the token. User Management's access tokens (0.1.1) carry only `sub`, `iss`, `aud`, `iat`, `exp` and `jti`, with no roles. In the meantime the gateway treats the users in `GATEWAY_ADMIN_USER_IDS` (the seeded admin `…0009`) as `admin`. | A roles claim in User Management's access token (Mădălina) |
