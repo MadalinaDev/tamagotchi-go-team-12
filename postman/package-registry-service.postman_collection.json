@@ -1,21 +1,37 @@
 {
   "info": {
-    "name": "Package Registry (Lab 1)",
-    "description": "tamagotchi-package-registry-service:0.1.0 on port 8088. Public routes send X-Mock-User-Id (Alice by default; admin routes add X-Mock-Roles: admin). Internal routes send X-Service-Name. Run top to bottom: later requests reuse ids saved by earlier ones. Package names get a per-run suffix so the collection can be re-run on the same database.",
+    "name": "Package Registry (Lab 2)",
+    "description": "tamagotchi-package-registry-service:0.3.0 behind the gateway (base_url = gateway, http://localhost:8080; the service port is not published). The first request logs Alice, Bob and the admin in through User Management (POST /api/v1/auth/login, seed password password123) and sends their access tokens as Authorization: Bearer; the gateway turns them into X-Auth-User-Id / X-Auth-Roles (admin routes need the admin account). Internal routes send the service credential in service_token (set it in the environment). Run top to bottom: later requests reuse ids saved by earlier ones. Package names get a per-run suffix so the collection can be re-run on the same database.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "base_url",
-      "value": "http://localhost:8088"
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "demo_password",
+      "value": "password123"
+    },
+    {
+      "key": "service_token",
+      "value": ""
+    },
+    {
+      "key": "alice_token",
+      "value": ""
+    },
+    {
+      "key": "bob_token",
+      "value": ""
+    },
+    {
+      "key": "admin_token",
+      "value": ""
     },
     {
       "key": "user_id",
       "value": "00000000-0000-4000-8000-000000000001"
-    },
-    {
-      "key": "admin_id",
-      "value": "00000000-0000-4000-8000-000000000009"
     },
     {
       "key": "bob_id",
@@ -48,8 +64,17 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "if (pm.environment.get('registry_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('registry_base_url'));",
-          "if (pm.info.requestName === 'Missing identity') pm.collectionVariables.set('run_id', String(Date.now()));"
+          "if (pm.environment.get('gateway_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('gateway_base_url'));",
+          "if (pm.environment.get('service_token')) pm.collectionVariables.set('service_token', pm.environment.get('service_token'));",
+          "if (pm.info.requestName === 'Missing access token') ['alice_token', 'bob_token', 'admin_token'].forEach((k) => pm.collectionVariables.unset(k));",
+          "const base = pm.collectionVariables.get('base_url');",
+          "const password = pm.collectionVariables.get('demo_password');",
+          "const post = (route, body, cb) => pm.sendRequest({ url: base + route, method: 'POST', header: { 'Content-Type': 'application/json' }, body: { mode: 'raw', raw: JSON.stringify(body) } }, cb);",
+          "const login = (email, key) => post('/api/v1/auth/login', { email, password }, (err, res) => { if (!err && res.code === 200) pm.collectionVariables.set(key, res.json().access_token); else console.warn('login failed for ' + email, err || res.code); });",
+          "if (!pm.collectionVariables.get('alice_token')) login('alice@example.com', 'alice_token');",
+          "if (!pm.collectionVariables.get('bob_token')) login('bob@example.com', 'bob_token');",
+          "if (!pm.collectionVariables.get('admin_token')) login('admin@example.com', 'admin_token');",
+          "if (pm.info.requestName === 'Missing access token') pm.collectionVariables.set('run_id', String(Date.now()));"
         ]
       }
     }
@@ -59,7 +84,7 @@
       "name": "Packages",
       "item": [
         {
-          "name": "Missing identity",
+          "name": "Missing access token",
           "event": [
             {
               "listen": "test",
@@ -103,12 +128,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
-              },
-              {
-                "key": "X-Mock-Roles",
-                "value": "admin"
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/packages",
@@ -146,8 +167,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/packages",
@@ -185,12 +206,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
-              },
-              {
-                "key": "X-Mock-Roles",
-                "value": "admin"
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/packages",
@@ -224,8 +241,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/packages?limit=20"
@@ -249,8 +266,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/packages/{{package_id}}"
@@ -279,8 +296,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/packages/{{package_id}}",
@@ -318,8 +335,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{bob_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/packages/{{package_id}}",
@@ -362,8 +379,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/packages/{{package_id}}/care-definitions",
@@ -401,8 +418,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/packages/{{package_id}}/care-definitions",
@@ -435,8 +452,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/packages/{{package_id}}/care-definitions/2"
@@ -469,8 +486,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{bob_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/packages/{{package_id}}/registrations",
@@ -508,8 +525,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{bob_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/packages/{{package_id}}/registrations",
@@ -543,8 +560,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{bob_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/package-registrations/me"
@@ -578,12 +595,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
-              },
-              {
-                "key": "X-Mock-Roles",
-                "value": "admin"
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raid-definitions",
@@ -621,12 +634,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
-              },
-              {
-                "key": "X-Mock-Roles",
-                "value": "admin"
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raid-definitions",
@@ -664,8 +673,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raid-definitions",
@@ -703,12 +712,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
-              },
-              {
-                "key": "X-Mock-Roles",
-                "value": "admin"
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raid-definitions/{{definition_id}}/versions",
@@ -741,12 +746,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
-              },
-              {
-                "key": "X-Mock-Roles",
-                "value": "admin"
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raid-definitions?limit=20"
@@ -770,12 +771,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
-              },
-              {
-                "key": "X-Mock-Roles",
-                "value": "admin"
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raid-definitions/{{definition_id}}/versions/1"
@@ -810,12 +807,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
-              },
-              {
-                "key": "X-Mock-Roles",
-                "value": "admin"
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raid-schedules",
@@ -853,12 +846,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
-              },
-              {
-                "key": "X-Mock-Roles",
-                "value": "admin"
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raid-schedules",
@@ -891,12 +880,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
-              },
-              {
-                "key": "X-Mock-Roles",
-                "value": "admin"
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raid-schedules?limit=20"
@@ -925,12 +910,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
-              },
-              {
-                "key": "X-Mock-Roles",
-                "value": "admin"
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raid-schedules/{{schedule_id}}/activate",
@@ -968,12 +949,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
-              },
-              {
-                "key": "X-Mock-Roles",
-                "value": "admin"
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raid-schedules/{{schedule_id}}/activate",
@@ -1011,12 +988,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
-              },
-              {
-                "key": "X-Mock-Roles",
-                "value": "admin"
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raid-schedules/{{schedule_id}}/cancel",
@@ -1054,8 +1027,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Service-Name",
-                "value": "guild-service"
+                "key": "Authorization",
+                "value": "Bearer {{service_token}}"
               }
             ],
             "url": "{{base_url}}/internal/v1/users/{{bob_id}}/package-registrations"
@@ -1079,8 +1052,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Service-Name",
-                "value": "tamagotchi-service"
+                "key": "Authorization",
+                "value": "Bearer {{service_token}}"
               }
             ],
             "url": "{{base_url}}/internal/v1/packages/{{package_id}}/care-definitions/1"
@@ -1104,8 +1077,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Service-Name",
-                "value": "tamagotchi-service"
+                "key": "Authorization",
+                "value": "Bearer {{service_token}}"
               }
             ],
             "url": "{{base_url}}/internal/v1/packages/{{package_id}}"
@@ -1129,15 +1102,15 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Service-Name",
-                "value": "monster-raid-service"
+                "key": "Authorization",
+                "value": "Bearer {{service_token}}"
               }
             ],
             "url": "{{base_url}}/internal/v1/raid-definitions/{{definition_id}}/versions/2"
           }
         },
         {
-          "name": "Internal: missing X-Service-Name",
+          "name": "Internal: no service credential",
           "event": [
             {
               "listen": "test",

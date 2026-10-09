@@ -170,7 +170,7 @@ services:
 
   monster-raid-service:
     <<: *service
-    image: sabinapopescu/tamagotchi-monster-raid-service:0.1.2
+    image: sabinapopescu/tamagotchi-monster-raid-service:0.3.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     environment:
@@ -179,12 +179,20 @@ services:
       DB_NAME: raid_db
       DB_USER: raid_user
       DB_PASSWORD: ${RAID_DB_PASSWORD}
-    ports:
-      - "8087:8087"
+      # Lab 2 task limits: 504 TASK_TIMEOUT, 503 TOO_MANY_CONCURRENT_TASKS.
+      TASK_TIMEOUT_MS: "5000"
+      MAX_CONCURRENT_TASKS: "50"
+      # Calls to other services go only through the gateway. Mocked until
+      # gateway-service and the teammates' internal routes run in this file.
+      GATEWAY_URL: http://gateway-service:8080
+      USE_MOCKS: "true"
+    # Lab 2: no host port; reachable only through gateway-service.
+    expose:
+      - "8087"
 
   package-registry-service:
     <<: *service
-    image: sabinapopescu/tamagotchi-package-registry-service:0.1.0
+    image: sabinapopescu/tamagotchi-package-registry-service:0.3.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     environment:
@@ -193,8 +201,16 @@ services:
       DB_NAME: registry_db
       DB_USER: registry_user
       DB_PASSWORD: ${REGISTRY_DB_PASSWORD}
-    ports:
-      - "8088:8088"
+      # Lab 2 task limits: 504 TASK_TIMEOUT, 503 TOO_MANY_CONCURRENT_TASKS.
+      TASK_TIMEOUT_MS: "5000"
+      MAX_CONCURRENT_TASKS: "50"
+      # Calls to other services go only through the gateway. Mocked until
+      # gateway-service and the teammates' internal routes run in this file.
+      GATEWAY_URL: http://gateway-service:8080
+      USE_MOCKS: "true"
+    # Lab 2: no host port; reachable only through gateway-service.
+    expose:
+      - "8088"
 
 volumes:
   pgdata:

@@ -1,29 +1,41 @@
 {
   "info": {
-    "name": "Monster Raid (Lab 1)",
-    "description": "tamagotchi-monster-raid-service:0.1.2 on port 8087. Public routes send X-Mock-User-Id (Alice by default); internal routes send X-Service-Name. Lab 1 has no RabbitMQ, so the first request creates a raid through the temporary POST /internal/v1/dev/raid-events. Each run uses a new schedule_id. Mocks: guild Founders (Alice, Bob, Carol), raid definition Big Slime v1 (300 HP); Alice deals 24 damage per attack.",
+    "name": "Monster Raid (Lab 2)",
+    "description": "tamagotchi-monster-raid-service:0.3.0 behind the gateway (base_url = gateway, http://localhost:8080; the service port is not published). The first request logs Alice, Bob and a freshly registered outsider in through User Management (POST /api/v1/auth/login, seed password password123) and sends their access tokens as Authorization: Bearer; the gateway turns them into X-Auth-User-Id / X-Auth-Roles. Internal routes send the service credential in service_token (set it in the environment). There is no RabbitMQ, so the first request creates a raid through the temporary POST /internal/v1/dev/raid-events; each run uses a new schedule_id. Mocks: guild Founders (Alice, Bob, Carol), raid definition Big Slime v1 (300 HP); Alice deals 24 damage per attack. The last folder checks the live HP stream (SSE) on a raid that has already ended, so the stream closes on its own.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "base_url",
-      "value": "http://localhost:8087"
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "demo_password",
+      "value": "password123"
+    },
+    {
+      "key": "service_token",
+      "value": ""
+    },
+    {
+      "key": "alice_token",
+      "value": ""
+    },
+    {
+      "key": "bob_token",
+      "value": ""
+    },
+    {
+      "key": "outsider_token",
+      "value": ""
     },
     {
       "key": "user_id",
       "value": "00000000-0000-4000-8000-000000000001"
     },
     {
-      "key": "admin_id",
-      "value": "00000000-0000-4000-8000-000000000009"
-    },
-    {
       "key": "bob_id",
       "value": "00000000-0000-4000-8000-000000000002"
-    },
-    {
-      "key": "outsider_id",
-      "value": "00000000-0000-4000-8000-0000000000ff"
     },
     {
       "key": "guild_id",
@@ -38,7 +50,15 @@
       "value": ""
     },
     {
+      "key": "ended_schedule_id",
+      "value": ""
+    },
+    {
       "key": "raid_id",
+      "value": ""
+    },
+    {
+      "key": "ended_raid_id",
       "value": ""
     },
     {
@@ -48,6 +68,10 @@
     {
       "key": "now",
       "value": ""
+    },
+    {
+      "key": "two_hours_ago",
+      "value": ""
     }
   ],
   "event": [
@@ -56,8 +80,18 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "if (pm.environment.get('raid_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('raid_base_url'));",
-          "if (pm.info.requestName === 'Create raid from activation event (dev)') { pm.collectionVariables.set('schedule_id', pm.variables.replaceIn('{{$guid}}')); pm.collectionVariables.set('now', new Date().toISOString()); pm.collectionVariables.set('pet_id', pm.variables.replaceIn('{{$guid}}')); }"
+          "if (pm.environment.get('gateway_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('gateway_base_url'));",
+          "if (pm.environment.get('service_token')) pm.collectionVariables.set('service_token', pm.environment.get('service_token'));",
+          "if (pm.info.requestName === 'Create raid from activation event (dev)') ['alice_token', 'bob_token', 'outsider_token'].forEach((k) => pm.collectionVariables.unset(k));",
+          "const base = pm.collectionVariables.get('base_url');",
+          "const password = pm.collectionVariables.get('demo_password');",
+          "const post = (route, body, cb) => pm.sendRequest({ url: base + route, method: 'POST', header: { 'Content-Type': 'application/json' }, body: { mode: 'raw', raw: JSON.stringify(body) } }, cb);",
+          "const login = (email, key) => post('/api/v1/auth/login', { email, password }, (err, res) => { if (!err && res.code === 200) pm.collectionVariables.set(key, res.json().access_token); else console.warn('login failed for ' + email, err || res.code); });",
+          "if (!pm.collectionVariables.get('alice_token')) login('alice@example.com', 'alice_token');",
+          "if (!pm.collectionVariables.get('bob_token')) login('bob@example.com', 'bob_token');",
+          "if (!pm.collectionVariables.get('outsider_token')) { const name = 'outsider' + Date.now(); post('/api/v1/users', { username: name, email: name + '@example.com', password, display_name: 'Outsider' }, () => login(name + '@example.com', 'outsider_token')); }",
+          "if (pm.info.requestName === 'Create raid from activation event (dev)') { pm.collectionVariables.set('schedule_id', pm.variables.replaceIn('{{$guid}}')); pm.collectionVariables.set('now', new Date().toISOString()); pm.collectionVariables.set('pet_id', pm.variables.replaceIn('{{$guid}}')); }",
+          "if (pm.info.requestName === 'Create an already-ended raid (dev)') { pm.collectionVariables.set('ended_schedule_id', pm.variables.replaceIn('{{$guid}}')); pm.collectionVariables.set('two_hours_ago', new Date(Date.now() - 2 * 3600 * 1000).toISOString()); }"
         ]
       }
     }
@@ -90,8 +124,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Service-Name",
-                "value": "package-registry-service"
+                "key": "Authorization",
+                "value": "Bearer {{service_token}}"
               }
             ],
             "url": "{{base_url}}/internal/v1/dev/raid-events",
@@ -130,8 +164,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Service-Name",
-                "value": "package-registry-service"
+                "key": "Authorization",
+                "value": "Bearer {{service_token}}"
               }
             ],
             "url": "{{base_url}}/internal/v1/dev/raid-events",
@@ -147,7 +181,7 @@
           }
         },
         {
-          "name": "Missing identity",
+          "name": "Missing access token",
           "event": [
             {
               "listen": "test",
@@ -186,8 +220,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raids?guild_id={{guild_id}}&limit=20"
@@ -212,8 +246,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{outsider_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{outsider_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raids?guild_id={{guild_id}}"
@@ -237,8 +271,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raids/{{raid_id}}"
@@ -264,8 +298,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raids/not-a-uuid"
@@ -298,8 +332,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raids/{{raid_id}}/participants",
@@ -336,8 +370,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raids/{{raid_id}}/participants",
@@ -375,8 +409,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{outsider_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{outsider_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raids/{{raid_id}}/participants",
@@ -410,8 +444,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raids/{{raid_id}}/participants?limit=20"
@@ -445,8 +479,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raids/{{raid_id}}/attacks",
@@ -484,8 +518,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{bob_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
               }
             ],
             "url": "{{base_url}}/api/v1/raids/{{raid_id}}/attacks",
@@ -524,8 +558,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Service-Name",
-                "value": "package-registry-service"
+                "key": "Authorization",
+                "value": "Bearer {{service_token}}"
               }
             ],
             "url": "{{base_url}}/internal/v1/raids/by-schedule/{{schedule_id}}"
@@ -550,15 +584,15 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Service-Name",
-                "value": "package-registry-service"
+                "key": "Authorization",
+                "value": "Bearer {{service_token}}"
               }
             ],
             "url": "{{base_url}}/internal/v1/raids/by-schedule/11111111-1111-4111-8111-111111111111"
           }
         },
         {
-          "name": "Internal: missing X-Service-Name",
+          "name": "Internal: no service credential",
           "event": [
             {
               "listen": "test",
@@ -576,6 +610,115 @@
             "method": "GET",
             "header": [],
             "url": "{{base_url}}/internal/v1/raids/by-schedule/{{schedule_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Live updates (SSE)",
+      "item": [
+        {
+          "name": "Create an already-ended raid (dev)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code < 300) pm.collectionVariables.set('ended_raid_id', pm.response.json().raid_id);",
+                  "pm.test('created as failed (late activation)', () => pm.expect(pm.response.json().state).to.eql('failed'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{service_token}}"
+              }
+            ],
+            "url": "{{base_url}}/internal/v1/dev/raid-events",
+            "description": "Activation two hours after starts_at (Big Slime lasts 3600 s): the raid is created directly as failed, so its event stream ends right after the snapshot.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"{{$guid}}\",\n  \"type\": \"RaidActivationRequested\",\n  \"version\": 1,\n  \"producer\": \"package-registry\",\n  \"occurred_at\": \"{{two_hours_ago}}\",\n  \"correlation_id\": \"{{ended_schedule_id}}\",\n  \"payload\": {\n    \"schedule_id\": \"{{ended_schedule_id}}\",\n    \"revision\": 1,\n    \"definition_id\": \"{{definition_id}}\",\n    \"definition_version\": 1,\n    \"guild_id\": \"{{guild_id}}\",\n    \"starts_at\": \"{{two_hours_ago}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Raid event stream (ended raid)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('text/event-stream', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/event-stream'));",
+                  "pm.test('one raid snapshot, then the stream ends', () => { const body = pm.response.text(); pm.expect(body).to.include('event: raid'); pm.expect(body).to.include('\"state\":\"failed\"'); pm.expect(body).to.include(pm.collectionVariables.get('ended_raid_id')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids/{{ended_raid_id}}/events",
+            "description": "Server-sent events: `raid` (snapshot and every state change), `attack` (every accepted attack with remaining_hp) and `ping` every 15 s. The stream ends once the raid is completed, failed or cancelled."
+          }
+        },
+        {
+          "name": "Raid event stream (not a member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('status 403 before any stream is opened', () => pm.response.to.have.status(403));",
+                  "pm.test('JSON error envelope', () => { const b = pm.response.json(); pm.expect(b.code).to.eql('RAID_FORBIDDEN'); pm.expect(b.request_id).to.be.a('string'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{outsider_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids/{{raid_id}}/events",
+            "description": "Same access rule as GET /api/v1/raids/{raid_id}: refused callers get a normal JSON error, not a stream."
           }
         }
       ]
