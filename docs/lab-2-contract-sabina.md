@@ -1,6 +1,6 @@
 # Lab 2 implemented contract — Sabina
 
-This addendum describes **tamagotchi-monster-raid-service:0.3.1** and **tamagotchi-package-registry-service:0.3.1**, the Lab 2 versions of Monster Raid and Package Registry. They implement the per-service items of the Lab 2 conventions (section 3). Everything in the [Lab 1 page](lab-1-contract-sabina.md) still applies unless this page says otherwise. Owners of affected services: please review the sections that concern you.
+This addendum describes **tamagotchi-monster-raid-service:0.3.2** and **tamagotchi-package-registry-service:0.3.1**, the Lab 2 versions of Monster Raid and Package Registry. They implement the per-service items of the Lab 2 conventions (section 3). Everything in the [Lab 1 page](lab-1-contract-sabina.md) still applies unless this page says otherwise. Owners of affected services: please review the sections that concern you.
 
 ## Behind the gateway (both services)
 
@@ -15,7 +15,7 @@ This addendum describes **tamagotchi-monster-raid-service:0.3.1** and **tamagotc
   | Service | Real, through the gateway | Still mocked | Why |
   | --- | --- | --- | --- |
   | Package Registry | User Management (`GET /internal/v1/users/{id}`), Guild (`GET /internal/v1/guilds/{id}`) | — | — |
-  | Monster Raid | Guild (guild, membership), Package Registry (raid and care definitions) | Tamagotchi | Tamagotchi 0.3.0 answers `403 SERVICE_FORBIDDEN` to `monster-raid` on its internal routes |
+  | Monster Raid | Guild (guild, membership), Package Registry (raid and care definitions) | Tamagotchi | Tamagotchi 0.3.0 rejects every raid reservation of a user who has a secondary pet selected: `409 TAMAGOTCHI_CONFLICT` with `secondary_pet_id: null` (raids use only the primary, Lab 0 contract), `422 INVALID_TAMAGOTCHI` with the secondary. The team smoke's Tamagotchi collection gives Alice a secondary pet, so no raid can be joined after it. Without a secondary pet the real path works end to end: reservation, busy-pet `409`, XP settlement (Ember XP 0 → 100, level 2) and release on the kill. |
   | Monster Raid | | User Management (wallet settlements) | User Management 0.1.1 checks raid rewards against its own mock raid definition and rejects the real one (`reward_per_recipient does not match the pinned raid definition`), which would leave every won raid in `settling` |
 
   Checked in the full team stack: a package with a newly registered user as developer is accepted (only the real User Management knows that user), the Guild service logs Monster Raid's membership checks and Package Registry's guild lookups, a raid played to the kill ends `completed`, and all eight Postman collections pass.
@@ -81,7 +81,7 @@ With `gateway-service` in the compose file, the smoke workflow runs both collect
 
 [`postman/monster-raid-service.postman_collection.json`](../postman/monster-raid-service.postman_collection.json) and [`postman/package-registry-service.postman_collection.json`](../postman/package-registry-service.postman_collection.json) now target the gateway (`gateway_base_url` in the shared environment). The first request of a run logs Alice, Bob and the admin in through `POST /api/v1/auth/login` (seed password `password123`). The Raid collection also registers a fresh outsider. Requests then send `Authorization: Bearer <access token>`. Internal requests send the service credential from the `service_token` environment variable.
 
-The Raid collection has a new **Live updates (SSE)** folder. It creates an already-ended raid, checks that its stream answers `200 text/event-stream` with one `raid` snapshot and closes, and checks that a non-member gets a JSON `403`.
+The Raid collection joins with Alice's current primary pet (read from `GET /api/v1/tamagotchi-selections/me`) and checks damage by formula, so it works against the mock and the real Tamagotchi. It then attacks until the monster dies (one request that repeats itself with `setNextRequest`), and checks that the raid is `completed` and Alice's reward `applied`: the kill settles the raid and frees the pet, so the collection can be re-run. It also has a **Live updates (SSE)** folder. It creates an already-ended raid, checks that its stream answers `200 text/event-stream` with one `raid` snapshot and closes, and checks that a non-member gets a JSON `403`.
 
 ## CI and images
 
@@ -91,7 +91,8 @@ The Lab 2 releases were published by that workflow. `:latest` has the same diges
 
 | Image | Release | Submodule | Adds |
 | --- | --- | --- | --- |
-| [`sabinapopescu/tamagotchi-monster-raid-service:0.3.1`](https://hub.docker.com/r/sabinapopescu/tamagotchi-monster-raid-service) | sabinapopescu/monster-raid-service#6 | `services/monster-raid-service` at `f152462` | gateway secret check |
+| [`sabinapopescu/tamagotchi-monster-raid-service:0.3.2`](https://hub.docker.com/r/sabinapopescu/tamagotchi-monster-raid-service) | sabinapopescu/monster-raid-service#8 | `services/monster-raid-service` at `813b138` | new reservation `Idempotency-Key` per join attempt: a join refused because the pet was busy can be retried once the pet is free (with one key per (raid, user), the real Tamagotchi replayed the old `409` forever) |
+| `sabinapopescu/tamagotchi-monster-raid-service:0.3.1` | sabinapopescu/monster-raid-service#6 | — | gateway secret check |
 | [`sabinapopescu/tamagotchi-package-registry-service:0.3.1`](https://hub.docker.com/r/sabinapopescu/tamagotchi-package-registry-service) | sabinapopescu/package-registry-service#6 | `services/package-registry-service` at `67bc3cf` | seed, gateway secret check |
 | `sabinapopescu/tamagotchi-monster-raid-service:0.3.0` | sabinapopescu/monster-raid-service#3 | — | first Lab 2 release |
 | `sabinapopescu/tamagotchi-package-registry-service:0.3.0` | sabinapopescu/package-registry-service#4 | — | first Lab 2 release |
@@ -109,7 +110,7 @@ MadalinaDev/gateway-service#3 (Sabina's gateway part: Raid/Registry routes and t
 
 | Item | Depends on |
 | --- | --- |
-| Monster Raid → Tamagotchi for real (pets, reservations, settlements) | Tamagotchi allowing `monster-raid` on its internal routes (Sava) |
+| Monster Raid → Tamagotchi for real (pets, reservations, settlements) | Tamagotchi checking only `primary_pet_id` against the stored selection for `kind: "raid"` reservations (Sava) |
 | Monster Raid → User Management wallet settlements for real | User Management checking raid rewards against Package Registry's raid definitions instead of its mock (Mădălina) |
 | The published `madalina060504/tamagotchi-gateway-service:0.3.0` predates gateway-service#3 and #5; compose still uses Sava's temporary build | A new gateway `dev` → `main` release (Mădălina) |
 | Admins recognised from the token. User Management's access tokens (0.1.1) carry only `sub`, `iss`, `aud`, `iat`, `exp` and `jti`, with no roles. In the meantime the gateway treats the users in `GATEWAY_ADMIN_USER_IDS` (the seeded admin `…0009`) as `admin`. | A roles claim in User Management's access token (Mădălina) |

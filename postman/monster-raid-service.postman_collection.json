@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Monster Raid (Lab 2)",
-    "description": "tamagotchi-monster-raid-service:0.3.0 behind the gateway (base_url = gateway, http://localhost:8080; the service port is not published). The first request logs Alice, Bob and a freshly registered outsider in through User Management (POST /api/v1/auth/login, seed password password123) and sends their access tokens as Authorization: Bearer; the gateway turns them into X-Auth-User-Id / X-Auth-Roles. Internal routes send the service credential in service_token (set it in the environment). There is no RabbitMQ, so the first request creates a raid through the temporary POST /internal/v1/dev/raid-events; each run uses a new schedule_id. Mocks: guild Founders (Alice, Bob, Carol), raid definition Big Slime v1 (300 HP); Alice deals 24 damage per attack. The last folder checks the live HP stream (SSE) on a raid that has already ended, so the stream closes on its own.",
+    "description": "tamagotchi-monster-raid-service:0.3.0 behind the gateway (base_url = gateway, http://localhost:8080; the service port is not published). The first request logs Alice, Bob and a freshly registered outsider in through User Management (POST /api/v1/auth/login, seed password password123) and sends their access tokens as Authorization: Bearer; the gateway turns them into X-Auth-User-Id / X-Auth-Roles. Internal routes send the service credential in service_token (set it in the environment). There is no RabbitMQ, so the first request creates a raid through the temporary POST /internal/v1/dev/raid-events; each run uses a new schedule_id. Real data through the gateway: guild Founders (Alice, Bob, Carol) from Guild, raid definition Big Slime v1 (300 HP) and care definitions from Package Registry, Alice's primary pet (read from GET /api/v1/tamagotchi-selections/me) reserved and settled by Tamagotchi. The run attacks until the monster dies, so the settlement frees the pet again and the collection can be re-run. The last folder checks the live HP stream (SSE) on a raid that has already ended, so the stream closes on its own.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -58,11 +58,15 @@
       "value": ""
     },
     {
-      "key": "ended_raid_id",
+      "key": "alice_pet_id",
       "value": ""
     },
     {
-      "key": "pet_id",
+      "key": "kill_attacks",
+      "value": "0"
+    },
+    {
+      "key": "ended_raid_id",
       "value": ""
     },
     {
@@ -92,7 +96,7 @@
           "if (!pm.collectionVariables.get('alice_token')) login('alice@example.com', 'alice_token');",
           "if (!pm.collectionVariables.get('bob_token')) login('bob@example.com', 'bob_token');",
           "if (!pm.collectionVariables.get('outsider_token')) registerOutsider('outsider' + Date.now());",
-          "if (pm.info.requestName === 'Create raid from activation event (dev)') { pm.collectionVariables.set('schedule_id', pm.variables.replaceIn('{{$guid}}')); pm.collectionVariables.set('now', new Date().toISOString()); pm.collectionVariables.set('pet_id', pm.variables.replaceIn('{{$guid}}')); }",
+          "if (pm.info.requestName === 'Create raid from activation event (dev)') { pm.collectionVariables.set('schedule_id', pm.variables.replaceIn('{{$guid}}')); pm.collectionVariables.set('now', new Date().toISOString()); pm.collectionVariables.set('kill_attacks', '0'); }",
           "if (pm.info.requestName === 'Create an already-ended raid (dev)') { pm.collectionVariables.set('ended_schedule_id', pm.variables.replaceIn('{{$guid}}')); pm.collectionVariables.set('two_hours_ago', new Date(Date.now() - 2 * 3600 * 1000).toISOString()); }"
         ]
       }
@@ -316,12 +320,22 @@
           "name": "Join raid (Alice)",
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({ url: pm.collectionVariables.get('base_url') + '/api/v1/tamagotchi-selections/me', method: 'GET', header: { Authorization: 'Bearer ' + pm.collectionVariables.get('alice_token') } }, (err, res) => { if (!err && res.code === 200) pm.collectionVariables.set('alice_pet_id', res.json().primary_pet_id); else console.warn('could not read Alice\\'s selection', err || res.code); });"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status 201', () => pm.response.to.have.status(201));",
-                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);"
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('joined with Alice\\'s primary pet', () => pm.expect(pm.response.json().pet_id).to.eql(pm.collectionVariables.get('alice_pet_id')));"
                 ]
               }
             }
@@ -341,7 +355,7 @@
             "url": "{{base_url}}/api/v1/raids/{{raid_id}}/participants",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"primary_pet_id\": \"{{pet_id}}\"\n}",
+              "raw": "{\n  \"primary_pet_id\": \"{{alice_pet_id}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -379,7 +393,7 @@
             "url": "{{base_url}}/api/v1/raids/{{raid_id}}/participants",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"primary_pet_id\": \"{{pet_id}}\"\n}",
+              "raw": "{\n  \"primary_pet_id\": \"{{alice_pet_id}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -468,7 +482,7 @@
                 "exec": [
                   "pm.test('status 201', () => pm.response.to.have.status(201));",
                   "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
-                  "pm.test('24 damage', () => { const b = pm.response.json(); pm.expect(b.damage).to.eql(24); pm.expect(b.remaining_hp).to.eql(276); });"
+                  "pm.test('damage applied to Big Slime (300 HP)', () => { const b = pm.response.json(); pm.expect(b.damage).to.be.above(0); pm.expect(b.remaining_hp).to.eql(300 - b.damage); });"
                 ]
               }
             }
@@ -534,6 +548,102 @@
                 }
               }
             }
+          }
+        },
+        {
+          "name": "Attack until the monster is defeated",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "const n = Number(pm.collectionVariables.get('kill_attacks') || 0) + 1;",
+                  "pm.collectionVariables.set('kill_attacks', String(n));",
+                  "if (b.remaining_hp > 0 && n < 60) postman.setNextRequest('Attack until the monster is defeated');",
+                  "else pm.test('monster defeated', () => pm.expect(b.remaining_hp).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids/{{raid_id}}/attacks",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Repeats itself (setNextRequest) until remaining_hp is 0. The killing blow settles the raid: Tamagotchi awards the XP and frees the pet, so the next run can reserve it again."
+          }
+        },
+        {
+          "name": "Raid completed after the kill",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('completed and settled', () => { const b = pm.response.json(); pm.expect(b.state).to.eql('completed'); pm.expect(b.hp).to.eql(0); pm.expect(b.settlement_pending).to.eql(0); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids/{{raid_id}}",
+            "description": "Settlement ran in the request that killed the monster."
+          }
+        },
+        {
+          "name": "Participant rewarded",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('X-Request-Id header', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty);",
+                  "pm.test('Alice\\'s reward applied', () => pm.expect(pm.response.json().items[0].reward_status).to.eql('applied'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/raids/{{raid_id}}/participants?limit=20"
           }
         }
       ]
