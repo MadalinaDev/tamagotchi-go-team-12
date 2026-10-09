@@ -85,11 +85,13 @@
           "if (pm.info.requestName === 'Create raid from activation event (dev)') ['alice_token', 'bob_token', 'outsider_token'].forEach((k) => pm.collectionVariables.unset(k));",
           "const base = pm.collectionVariables.get('base_url');",
           "const password = pm.collectionVariables.get('demo_password');",
+          "function uuidv4() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (cc) { var r = Math.random() * 16 | 0; return (cc === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }); }",
           "const post = (route, body, cb) => pm.sendRequest({ url: base + route, method: 'POST', header: { 'Content-Type': 'application/json' }, body: { mode: 'raw', raw: JSON.stringify(body) } }, cb);",
           "const login = (email, key) => post('/api/v1/auth/login', { email, password }, (err, res) => { if (!err && res.code === 200) pm.collectionVariables.set(key, res.json().access_token); else console.warn('login failed for ' + email, err || res.code); });",
+          "const registerOutsider = (name) => pm.sendRequest({ url: base + '/api/v1/users', method: 'POST', header: { 'Content-Type': 'application/json', 'Idempotency-Key': uuidv4() }, body: { mode: 'raw', raw: JSON.stringify({ username: name, email: name + '@example.com', password, display_name: 'Outsider' }) } }, () => login(name + '@example.com', 'outsider_token'));",
           "if (!pm.collectionVariables.get('alice_token')) login('alice@example.com', 'alice_token');",
           "if (!pm.collectionVariables.get('bob_token')) login('bob@example.com', 'bob_token');",
-          "if (!pm.collectionVariables.get('outsider_token')) { const name = 'outsider' + Date.now(); post('/api/v1/users', { username: name, email: name + '@example.com', password, display_name: 'Outsider' }, () => login(name + '@example.com', 'outsider_token')); }",
+          "if (!pm.collectionVariables.get('outsider_token')) registerOutsider('outsider' + Date.now());",
           "if (pm.info.requestName === 'Create raid from activation event (dev)') { pm.collectionVariables.set('schedule_id', pm.variables.replaceIn('{{$guid}}')); pm.collectionVariables.set('now', new Date().toISOString()); pm.collectionVariables.set('pet_id', pm.variables.replaceIn('{{$guid}}')); }",
           "if (pm.info.requestName === 'Create an already-ended raid (dev)') { pm.collectionVariables.set('ended_schedule_id', pm.variables.replaceIn('{{$guid}}')); pm.collectionVariables.set('two_hours_ago', new Date(Date.now() - 2 * 3600 * 1000).toISOString()); }"
         ]

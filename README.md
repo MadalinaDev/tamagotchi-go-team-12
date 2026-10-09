@@ -12,6 +12,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Communication contract](#communication-contract)
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
+- [Lab 2 — Running through the Gateway](#lab-2--running-through-the-gateway)
 - [Lab 1 — Running the whole system](#lab-1--running-the-whole-system)
 - [Lab 1 — Running Sava's services](#lab-1--running-savas-services)
 - [Lab 1 — Running User Management and Map](#lab-1--running-user-management-and-map)
@@ -39,6 +40,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 ```mermaid
 flowchart LR
     C[Package clients]
+    GW["Gateway<br/>Python"]
     U["User Management<br/>TypeScript / NestJS"]
     M["Map<br/>TypeScript / NestJS"]
     P["Package Registry<br/>TypeScript / NestJS"]
@@ -49,7 +51,10 @@ flowchart LR
     N["Notification<br/>Go"]
     Q[(RabbitMQ)]
     F[Firebase Cloud Messaging]
-    C -->|REST / JSON| U & M & P & R & B & T & G & N
+    C -->|REST / JSON| GW
+    GW -->|REST / JSON| U & M & P & R & B & T & G & N
+    C -->|chat ticket| GW
+    GW -.->|direct ws_url| C
     C <-->|WebSocket chat| G
     M -->|relationships| U
     U -->|package registration / raid reward rules| P
@@ -73,7 +78,7 @@ flowchart LR
     N -->|raid-start recipients| G
 ```
 
-Every service has its **own PostgreSQL database and credentials**. Those eight databases are omitted above for readability. A shared PostgreSQL server is acceptable for local development; tables and credentials remain isolated. Client routing can initially use configured service URLs; a gateway can be added later without changing the contracts. Public and internal routes must be separated by network exposure and authorization.
+Every service has its **own PostgreSQL database and credentials**. Those eight databases are omitted above for readability. A shared PostgreSQL server is acceptable for local development; tables and credentials remain isolated. Since Lab 2 every REST request goes through the Gateway (the only published REST port, 8080): it validates `Authorization`, strips it, and forwards trusted identity headers plus `X-Gateway-Secret`. Direct service REST ports are internal-only. Public and internal routes must be separated by network exposure and authorization.
 
 | Caller / producer | Receiver | Purpose |
 | --- | --- | --- |
@@ -533,6 +538,38 @@ This section defines the team policy. **Documented rules are not proof that GitH
 
 Private repos admit the professor(s), not teammates, as required by the lab. Peer review of shared contracts happens in this public repo; the private owner applies the agreed contract in their own README. Do not require an unavailable teammate approval in private repo settings.
 
+## Lab 2 — Running through the Gateway
+
+Lab 2 puts the Python Gateway in front of every REST call: port **8080** is the
+only REST entry point. The Gateway validates `Authorization: Bearer <JWT>`
+(User Management RS256 via JWKS), strips it, and forwards trusted identity
+headers plus `X-Gateway-Secret`. Migrated services (`Battle`, `Tamagotchi`)
+run image `0.3.0` with `AUTH_MODE=gateway`, `USE_MOCKS=false`, a 5 s task
+timeout and a 50-task concurrency limit; their REST ports are internal-only.
+The full rules are in [docs/lab-2-conventions.md](docs/lab-2-conventions.md).
+
+Sava's part is done and verified: Gateway ([MadalinaDev/gateway-service](https://github.com/MadalinaDev/gateway-service),
+Sava's Battle/Tamagotchi routes), Battle and Tamagotchi `0.3.0` images
+(`ekkusuu/tamagotchi-battle-service:0.3.0`,
+`ekkusuu/tamagotchi-tamagotchi-service:0.3.0`, both + `latest`), full combat
+engine and pet reservation/settlement, CI publishing on merge to `main`.
+
+Run and verify (`.env` needs the Lab 2 tokens/secrets from `.env.example`):
+
+```sh
+docker compose up -d --wait
+curl http://localhost:8080/health
+npx newman run postman/battle-service.postman_collection.json
+npx newman run postman/tamagotchi-service.postman_collection.json
+```
+
+Both collections log in as the seeded users (`alice@example.com` /
+`password123`, seeded by User Management) and exercise CRUD plus the
+challenge/decline and selection flows through the Gateway. Full battle
+accept → settlement additionally needs Package Registry `0.3.0` to seed the
+convention packages and registrations (pending Sabina); Guild chat tickets
+need Guild `0.3.0` (pending Vica).
+
 ## Lab 1 — Running the whole system
 
 All eight services are published on Docker Hub and started together by one Compose file. This section is the entry point for Lab 1. The owner sections below give per-service details.
@@ -589,8 +626,8 @@ done
 
 | Collection | Requests |
 | --- | --- |
-| battle-service | 13 |
-| tamagotchi-service | 19 |
+| battle-service | 12 (Lab 2, via Gateway) |
+| tamagotchi-service | 12 (Lab 2, via Gateway) |
 | guild-service | 31 |
 | notification-service | 12 |
 | user-management-service | 28 |

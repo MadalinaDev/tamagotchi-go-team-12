@@ -18,6 +18,15 @@ jobs:
       MAP_DB_PASSWORD: ci_map_${{ github.run_id }}
       RAID_DB_PASSWORD: ci_raid_${{ github.run_id }}
       REGISTRY_DB_PASSWORD: ci_registry_${{ github.run_id }}
+      GATEWAY_SECRET: ci_gateway_secret_${{ github.run_id }}
+      BATTLE_SERVICE_TOKEN: ci_tok_battle_${{ github.run_id }}
+      TAMAGOTCHI_SERVICE_TOKEN: ci_tok_tama_${{ github.run_id }}
+      GUILD_SERVICE_TOKEN: ci_tok_guild_${{ github.run_id }}
+      NOTIFICATION_SERVICE_TOKEN: ci_tok_notif_${{ github.run_id }}
+      USER_MANAGEMENT_SERVICE_TOKEN: ci_tok_users_${{ github.run_id }}
+      MAP_SERVICE_TOKEN: ci_tok_map_${{ github.run_id }}
+      RAID_SERVICE_TOKEN: ci_tok_raid_${{ github.run_id }}
+      REGISTRY_SERVICE_TOKEN: ci_tok_registry_${{ github.run_id }}
       COMPOSE_PROJECT_NAME: pad-lab1-ci
     steps:
       - uses: actions/checkout@v4
@@ -25,6 +34,7 @@ jobs:
         with:
           node-version: '22'
       - run: docker compose pull && docker compose up -d --wait
+      - run: curl --fail http://localhost:8080/health
       - run: npx --yes newman@6.2.1 run postman/battle-service.postman_collection.json --bail
       - run: npx --yes newman@6.2.1 run postman/tamagotchi-service.postman_collection.json --bail
       - run: npx --yes newman@6.2.1 run postman/guild-service.postman_collection.json --bail
@@ -42,8 +52,8 @@ jobs:
             exit 1
           fi
           if docker compose config --services | grep -qx gateway-service; then
-            npx --yes newman@6.2.1 run postman/monster-raid-service.postman_collection.json --bail
-            npx --yes newman@6.2.1 run postman/package-registry-service.postman_collection.json --bail
+            npx --yes newman@6.2.1 run postman/monster-raid-service.postman_collection.json --bail --env-var "service_token=$RAID_SERVICE_TOKEN"
+            npx --yes newman@6.2.1 run postman/package-registry-service.postman_collection.json --bail --env-var "service_token=$REGISTRY_SERVICE_TOKEN"
           else
             echo "::notice::gateway-service is not in docker-compose.yml yet; checking Monster Raid and Package Registry inside the compose network instead of running their gateway collections."
             docker compose exec -T monster-raid-service node - < .github/smoke/sabina-services-probe.js

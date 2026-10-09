@@ -1,17 +1,19 @@
-# Tamagotchi Go, Team 12: common deployment for Lab 1.
+# Tamagotchi Go, Team 12: common deployment for Lab 2.
 #
 # Only published Docker Hub images are used (no `build:`); every image is
-# built in its private repository and pushed as <owner>/<image>:0.1.0.
+# built in its private repository and pushed as <owner>/<image>:0.3.0.
 #
 # Usage:
-#   cp .env.example .env     # set the passwords (letters, digits and underscores)
+#   cp .env.example .env     # set the passwords, tokens and secrets (letters, digits and underscores)
 #   docker compose up -d --wait
 #
 # Postgres runs the scripts in ./db/init only on an empty volume. To start
 # from scratch (drops all data): docker compose down -v
 #
 # Ports, image names and database names follow docs/lab-1-conventions
-# (sections 2-4 and 10).
+# (sections 2-4 and 10); the Lab 2 routing, auth and limits follow
+# docs/lab-2-conventions.md. The Gateway (port 8080) is the only REST
+# entry point; migrated services use `expose:` instead of `ports:`.
 
 name: tamagotchi-go
 
@@ -58,43 +60,104 @@ services:
       retries: 20
     restart: unless-stopped
 
+  gateway-service:
+    # TEMPORARY: Sava's build of the merged gateway code, published so CI can
+    # run until Madalina publishes madalina060504/tamagotchi-gateway-service:0.3.0.
+    image: ekkusuu/tamagotchi-gateway-service:0.3.0
+    # Published for amd64 only; runs emulated on Apple Silicon.
+    platform: linux/amd64
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      BATTLE_URL: http://battle-service:8081
+      TAMAGOTCHI_URL: http://tamagotchi-service:8082
+      GUILD_URL: http://guild-service:8083
+      NOTIFICATION_URL: http://notification-service:8084
+      USER_MANAGEMENT_URL: http://user-management-service:8085
+      MAP_URL: http://map-service:8086
+      RAID_URL: http://monster-raid-service:8087
+      REGISTRY_URL: http://package-registry-service:8088
+      GUILD_PUBLIC_WS_URL: ws://localhost:8083
+      AUTH_MODE: jwks
+      JWKS_URL: http://user-management-service:8085/api/v1/auth/jwks
+      JWT_ISSUER: user-management
+      JWT_AUDIENCE: tamagotchi-go
+      INTERNAL_SERVICE_TOKENS: >-
+        battle=${BATTLE_SERVICE_TOKEN:?set BATTLE_SERVICE_TOKEN in .env},
+        tamagotchi=${TAMAGOTCHI_SERVICE_TOKEN:?set TAMAGOTCHI_SERVICE_TOKEN in .env},
+        guild=${GUILD_SERVICE_TOKEN:?set GUILD_SERVICE_TOKEN in .env},
+        notification=${NOTIFICATION_SERVICE_TOKEN:?set NOTIFICATION_SERVICE_TOKEN in .env},
+        user-management=${USER_MANAGEMENT_SERVICE_TOKEN:?set USER_MANAGEMENT_SERVICE_TOKEN in .env},
+        map=${MAP_SERVICE_TOKEN:?set MAP_SERVICE_TOKEN in .env},
+        monster-raid=${RAID_SERVICE_TOKEN:?set RAID_SERVICE_TOKEN in .env},
+        package-registry=${REGISTRY_SERVICE_TOKEN:?set REGISTRY_SERVICE_TOKEN in .env}
+      GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
+      # Interim bridge until User Management emits role claims (seed admin ID).
+      GATEWAY_ADMIN_USER_IDS: ${GATEWAY_ADMIN_USER_IDS:-00000000-0000-4000-8000-000000000009}
+      TASK_TIMEOUT_MS: "5000"
+      MAX_CONCURRENT_TASKS: "50"
+    ports:
+      - "8080:8080"
+
   battle-service:
     <<: *service
-    image: ekkusuu/tamagotchi-battle-service:0.1.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      gateway-service:
+        condition: service_started
+    image: ekkusuu/tamagotchi-battle-service:0.3.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     environment:
       <<: *service-env
+      AUTH_MODE: gateway
       PORT: "8081"
       DB_NAME: battle_db
       DB_USER: battle_user
       DB_PASSWORD: ${BATTLE_DB_PASSWORD}
-      # Extra settings read by Sava's images (see PR #28).
       STORAGE: postgres
       DB_SSLMODE: disable
-      USE_MOCKS: "true"
+      USE_MOCKS: "false"
       SEED_ON_START: "true"
-    ports:
-      - "8081:8081"
+      TASK_TIMEOUT: 5s
+      MAX_CONCURRENT_TASKS: "50"
+      GATEWAY_URL: http://gateway-service:8080
+      GATEWAY_SERVICE_TOKEN: ${BATTLE_SERVICE_TOKEN}
+      GATEWAY_SECRET: ${GATEWAY_SECRET}
+    expose:
+      - "8081"
 
   tamagotchi-service:
     <<: *service
-    image: ekkusuu/tamagotchi-tamagotchi-service:0.1.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      gateway-service:
+        condition: service_started
+    image: ekkusuu/tamagotchi-tamagotchi-service:0.3.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     environment:
       <<: *service-env
+      AUTH_MODE: gateway
       PORT: "8082"
       DB_NAME: tamagotchi_db
       DB_USER: tamagotchi_user
       DB_PASSWORD: ${TAMAGOTCHI_DB_PASSWORD}
-      # Extra settings read by Sava's images (see PR #28).
       STORAGE: postgres
       DB_SSLMODE: disable
-      USE_MOCKS: "true"
+      USE_MOCKS: "false"
       SEED_ON_START: "true"
-    ports:
-      - "8082:8082"
+      TASK_TIMEOUT: 5s
+      MAX_CONCURRENT_TASKS: "50"
+      GATEWAY_URL: http://gateway-service:8080
+      GATEWAY_SERVICE_TOKEN: ${TAMAGOTCHI_SERVICE_TOKEN}
+      GATEWAY_SECRET: ${GATEWAY_SECRET}
+    expose:
+      - "8082"
 
   guild-service:
     <<: *service
