@@ -251,7 +251,7 @@ services:
 
   monster-raid-service:
     <<: *service
-    image: sabinapopescu/tamagotchi-monster-raid-service:0.3.1
+    image: sabinapopescu/tamagotchi-monster-raid-service:0.3.2
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     environment:
@@ -268,10 +268,11 @@ services:
       GATEWAY_URL: http://gateway-service:8080
       SERVICE_TOKEN: ${RAID_SERVICE_TOKEN}
       USE_MOCKS: "false"
-      # Guild and Package Registry are real. Still mocked: Tamagotchi answers
-      # 403 SERVICE_FORBIDDEN to monster-raid, and User Management 0.1.1 checks
-      # raid rewards against its own mock raid definition, so wallet
-      # settlements are rejected (reward_per_recipient mismatch).
+      # Guild and Package Registry are real. Still mocked:
+      # - Tamagotchi 0.3.0 rejects every raid reservation of a user who has a
+      #   secondary pet selected (409 with secondary_pet_id null, 422 with it);
+      # - User Management 0.1.1 checks raid rewards against its own mock raid
+      #   definition, so wallet settlements are rejected.
       MOCK_DEPENDENCIES: tamagotchi,user-management
       # Same secret as the gateway: requests without X-Gateway-Secret get 401.
       GATEWAY_SECRET: ${GATEWAY_SECRET}
