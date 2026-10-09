@@ -161,8 +161,12 @@ services:
 
   guild-service:
     <<: *service
-    # 0.1.1: STORAGE, USE_MOCKS, SEED_ON_START and /health (conventions section 3).
-    image: nikvnln/tamagotchi-guild-service:0.1.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      gateway-service:
+        condition: service_started
+    image: nikvnln/tamagotchi-guild-service:0.3.0
     environment:
       <<: *service-env
       PORT: "8083"
@@ -170,18 +174,28 @@ services:
       DB_NAME: guild_db
       DB_USER: guild_user
       DB_PASSWORD: ${GUILD_DB_PASSWORD}
-      USE_MOCKS: "true"
       SEED_ON_START: "true"
-      # Used only with USE_MOCKS=false.
-      USER_MANAGEMENT_URL: http://user-management-service:8085
-      REGISTRY_URL: http://package-registry-service:8088
+      # REST is accepted only from the gateway (X-Gateway-Secret).
+      GATEWAY_SECRET: ${GATEWAY_SECRET}
+      # User Management, Package Registry and Notification through the gateway.
+      USE_MOCKS: "false"
+      GATEWAY_URL: http://gateway-service:8080
+      SERVICE_TOKEN: ${GUILD_SERVICE_TOKEN}
+      TASK_TIMEOUT_MS: "5000"
+      MAX_CONCURRENT_TASKS: "50"
     ports:
+      # Published only for the direct chat WebSocket that the gateway hands
+      # out (GUILD_PUBLIC_WS_URL); REST still requires the gateway secret.
       - "8083:8083"
 
   notification-service:
     <<: *service
-    # 0.1.1: STORAGE, USE_MOCKS, SEED_ON_START and /health (conventions section 3).
-    image: nikvnln/tamagotchi-notification-service:0.1.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      gateway-service:
+        condition: service_started
+    image: nikvnln/tamagotchi-notification-service:0.3.0
     environment:
       <<: *service-env
       PORT: "8084"
@@ -189,12 +203,16 @@ services:
       DB_NAME: notification_db
       DB_USER: notification_user
       DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
-      USE_MOCKS: "true"
       SEED_ON_START: "true"
-      # Used only with USE_MOCKS=false.
-      GUILD_URL: http://guild-service:8083
-    ports:
-      - "8084:8084"
+      GATEWAY_SECRET: ${GATEWAY_SECRET}
+      # Guild through the gateway.
+      USE_MOCKS: "false"
+      GATEWAY_URL: http://gateway-service:8080
+      SERVICE_TOKEN: ${NOTIFICATION_SERVICE_TOKEN}
+      TASK_TIMEOUT_MS: "5000"
+      MAX_CONCURRENT_TASKS: "50"
+    expose:
+      - "8084"
 
   user-management-service:
     <<: *service
