@@ -87,5 +87,5 @@ Each repository has `.github/workflows/ci.yml`. Pull requests into `dev` and `ma
 | The `0.3.0` images are **not published yet**, so `docker compose pull` and the smoke workflow fail on this branch until they are. The Docker Hub secrets are in place. | Merging MadalinaDev/user-management-service#1 and MadalinaDev/map-service#1, then the release `dev` → `main` in each repository (Mădălina) |
 | The submodule pointers still pin the Lab 1 commits. | The releases above |
 | Trusted package backends (`package:<package_id>`) cannot call `POST /internal/v1/wallets/local-operations` through the gateway: it only maps the eight team services to service tokens. User Management still binds such callers to their package. | Package-backend identities in the gateway |
-| The compose file still runs Sava's temporary gateway image `ekkusuu/tamagotchi-gateway-service:0.3.0`. | MadalinaDev/gateway-service#8 and #9 (release `0.3.1`), then a one-line compose change and a submodule bump |
+| The compose file still runs Sava's temporary gateway image `ekkusuu/tamagotchi-gateway-service:0.3.0`; the published `madalina060504/tamagotchi-gateway-service:0.3.1` replaces it. | #49 |
 | The gateway's interim `GATEWAY_ADMIN_USER_IDS` bridge is redundant for the seeded admin once User Management `0.3.0` issues `roles`. | This pull request; remove the bridge in a follow-up |
