@@ -170,7 +170,7 @@ services:
 
   monster-raid-service:
     <<: *service
-    image: sabinapopescu/tamagotchi-monster-raid-service:0.3.0
+    image: sabinapopescu/tamagotchi-monster-raid-service:0.3.1
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     environment:
@@ -186,13 +186,17 @@ services:
       # gateway-service and the teammates' internal routes run in this file.
       GATEWAY_URL: http://gateway-service:8080
       USE_MOCKS: "true"
+      # Same secret as the gateway: requests without it get 401 (empty = not checked).
+      GATEWAY_SECRET: ${GATEWAY_SECRET:-}
+      # Credential the gateway maps to this service's X-Service-Name.
+      SERVICE_TOKEN: ${RAID_SERVICE_TOKEN:-}
     # Lab 2: no host port; reachable only through gateway-service.
     expose:
       - "8087"
 
   package-registry-service:
     <<: *service
-    image: sabinapopescu/tamagotchi-package-registry-service:0.3.0
+    image: sabinapopescu/tamagotchi-package-registry-service:0.3.1
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     environment:
@@ -208,6 +212,12 @@ services:
       # gateway-service and the teammates' internal routes run in this file.
       GATEWAY_URL: http://gateway-service:8080
       USE_MOCKS: "true"
+      # Same secret as the gateway: requests without it get 401 (empty = not checked).
+      GATEWAY_SECRET: ${GATEWAY_SECRET:-}
+      # Credential the gateway maps to this service's X-Service-Name.
+      SERVICE_TOKEN: ${REGISTRY_SERVICE_TOKEN:-}
+      # Fixed-ID seed (PetHub, MoodPets, registrations, Big Slime) when empty.
+      SEED_ON_START: "true"
     # Lab 2: no host port; reachable only through gateway-service.
     expose:
       - "8088"
