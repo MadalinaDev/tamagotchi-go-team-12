@@ -596,9 +596,9 @@ connection-pool fix in #5), Monster Raid and Package Registry `0.3.1`
 (`sabinapopescu/tamagotchi-monster-raid-service:0.3.1`,
 `sabinapopescu/tamagotchi-package-registry-service:0.3.1`, both + `latest`),
 live raid HP over SSE through the Gateway, the Package Registry seed, and CI
-publishing on merge to `main`. Both services call Guild, User Management and
-each other through the Gateway; the remaining mocks are listed in
-[docs/lab-2-contract-sabina.md](docs/lab-2-contract-sabina.md).
+publishing on merge to `main`. Both services call Guild, Tamagotchi, User
+Management and each other through the Gateway, with no mocks left (details in
+[docs/lab-2-contract-sabina.md](docs/lab-2-contract-sabina.md)).
 
 Run and verify (`.env` needs the Lab 2 tokens/secrets from `.env.example`):
 
