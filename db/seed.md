@@ -20,5 +20,6 @@ The files in [`seed/`](seed) are read-only copies for reviewers and for Postman.
 | Map | none | Nothing: Map stores only live locations, which expire after 120 s. The Postman collection shares locations itself |
 | Guild | [`seed/guild-service.sql`](seed/guild-service.sql) | Guild "Founders" `…00c1` with leader Alice and members Bob and Carol |
 | Notification | [`seed/notification-service.sql`](seed/notification-service.sql) | Two unread entries in Bob's inbox: Alice's friend request (friendship `…00e1`) and battle challenge (battle `…00e1`) |
+| Package Registry | [`seed/package-registry-service.json`](seed/package-registry-service.json) | Packages PetHub `…00a1` (hunger, happiness) and MoodPets `…00a2` (energy, mood), each with care definition v1; registrations Alice → both, Bob → PetHub, Carol → MoodPets; raid definition "Big Slime" `…00d1` v1 |
 
 Owners of the remaining services add their row and file when their seed exists.
