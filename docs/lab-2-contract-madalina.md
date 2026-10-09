@@ -75,17 +75,16 @@ Called **by** these services through the gateway, so they must be routed to thei
 
 Each repository has `.github/workflows/ci.yml`. Pull requests into `dev` and `main` run the type check, the Jest tests (27 in User Management, 25 in Map) and the build. A push to `main` also builds the image and pushes `madalina060504/tamagotchi-<service>:<package.json version>` and `:latest` to Docker Hub. The version is `0.3.0` for Lab 2. The workflow reads the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets.
 
-| Image | Pull request |
-| --- | --- |
-| `madalina060504/tamagotchi-user-management-service:0.3.0` | MadalinaDev/user-management-service#1 |
-| `madalina060504/tamagotchi-map-service:0.3.0` | MadalinaDev/map-service#1 |
+The Lab 2 releases were published by that workflow, and `:latest` has the same image as `:0.3.0`:
+
+| Image | Release | Submodule |
+| --- | --- | --- |
+| [`madalina060504/tamagotchi-user-management-service:0.3.0`](https://hub.docker.com/r/madalina060504/tamagotchi-user-management-service) | MadalinaDev/user-management-service#2 | `services/user-management-service` at `62559b6` |
+| [`madalina060504/tamagotchi-map-service:0.3.0`](https://hub.docker.com/r/madalina060504/tamagotchi-map-service) | MadalinaDev/map-service#2 | `services/map-service` at `8aa086d` |
 
 ## Open items
 
 | Item | Depends on |
 | --- | --- |
-| The `0.3.0` images are **not published yet**, so `docker compose pull` and the smoke workflow fail on this branch until they are. The Docker Hub secrets are in place. | Merging MadalinaDev/user-management-service#1 and MadalinaDev/map-service#1, then the release `dev` → `main` in each repository (Mădălina) |
-| The submodule pointers still pin the Lab 1 commits. | The releases above |
 | Trusted package backends (`package:<package_id>`) cannot call `POST /internal/v1/wallets/local-operations` through the gateway: it only maps the eight team services to service tokens. User Management still binds such callers to their package. | Package-backend identities in the gateway |
-| The compose file still runs Sava's temporary gateway image `ekkusuu/tamagotchi-gateway-service:0.3.0`; the published `madalina060504/tamagotchi-gateway-service:0.3.1` replaces it. | #49 |
 | The gateway's interim `GATEWAY_ADMIN_USER_IDS` bridge is redundant for the seeded admin once User Management `0.3.0` issues `roles`. | This pull request; remove the bridge in a follow-up |
