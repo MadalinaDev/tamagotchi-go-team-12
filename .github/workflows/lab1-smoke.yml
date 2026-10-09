@@ -37,8 +37,8 @@ jobs:
       - run: curl --fail http://localhost:8080/health
       - run: npx --yes newman@6.2.1 run postman/battle-service.postman_collection.json --bail
       - run: npx --yes newman@6.2.1 run postman/tamagotchi-service.postman_collection.json --bail
-      - run: npx --yes newman@6.2.1 run postman/guild-service.postman_collection.json -e postman/local.postman_environment.json --bail --env-var "service_token=$RAID_SERVICE_TOKEN"
-      - run: npx --yes newman@6.2.1 run postman/notification-service.postman_collection.json -e postman/local.postman_environment.json --bail --env-var "service_token=$RAID_SERVICE_TOKEN"
+      - run: npx --yes newman@6.2.1 run postman/guild-service.postman_collection.json -e postman/local.postman_environment.json --bail --env-var "service_token=$GUILD_SERVICE_TOKEN"
+      - run: npx --yes newman@6.2.1 run postman/notification-service.postman_collection.json -e postman/local.postman_environment.json --bail --env-var "service_token=$NOTIFICATION_SERVICE_TOKEN"
       - run: npx --yes newman@6.2.1 run postman/user-management-service.postman_collection.json --bail
       - run: npx --yes newman@6.2.1 run postman/map-service.postman_collection.json --bail
       # Since Lab 2, Monster Raid and Package Registry are reachable only through
