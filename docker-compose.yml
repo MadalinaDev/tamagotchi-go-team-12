@@ -246,11 +246,15 @@ services:
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
       # Calls to other services go only through the gateway, with SERVICE_TOKEN
-      # (mapped to this service's X-Service-Name). Still mocked: USE_MOCKS=false
-      # once the teammates' internal routes are verified in this stack.
+      # (mapped to this service's X-Service-Name).
       GATEWAY_URL: http://gateway-service:8080
       SERVICE_TOKEN: ${RAID_SERVICE_TOKEN}
-      USE_MOCKS: "true"
+      USE_MOCKS: "false"
+      # Guild and Package Registry are real. Still mocked: Tamagotchi answers
+      # 403 SERVICE_FORBIDDEN to monster-raid, and User Management 0.1.1 checks
+      # raid rewards against its own mock raid definition, so wallet
+      # settlements are rejected (reward_per_recipient mismatch).
+      MOCK_DEPENDENCIES: tamagotchi,user-management
       # Same secret as the gateway: requests without X-Gateway-Secret get 401.
       GATEWAY_SECRET: ${GATEWAY_SECRET}
     # Lab 2: no host port; reachable only through gateway-service.
@@ -272,11 +276,10 @@ services:
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
       # Calls to other services go only through the gateway, with SERVICE_TOKEN
-      # (mapped to this service's X-Service-Name). Still mocked: USE_MOCKS=false
-      # once the teammates' internal routes are verified in this stack.
+      # (mapped to this service's X-Service-Name).
       GATEWAY_URL: http://gateway-service:8080
       SERVICE_TOKEN: ${REGISTRY_SERVICE_TOKEN}
-      USE_MOCKS: "true"
+      USE_MOCKS: "false"
       # Same secret as the gateway: requests without X-Gateway-Secret get 401.
       GATEWAY_SECRET: ${GATEWAY_SECRET}
       # Fixed-ID seed (PetHub, MoodPets, registrations, Big Slime) when empty.
