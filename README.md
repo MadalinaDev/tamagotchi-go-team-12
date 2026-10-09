@@ -643,6 +643,19 @@ npx newman run postman/guild-service.postman_collection.json -e postman/local.po
 npx newman run postman/notification-service.postman_collection.json -e postman/local.postman_environment.json --env-var service_token=<token>
 ```
 
+### User Management and Map (Mădălina)
+
+User Management and Map `0.3.0` run behind the Gateway with `AUTH_MODE=gateway` and `USE_MOCKS=false`. They trust `X-Auth-User-Id` / `X-Service-Name` only together with `X-Gateway-Secret`, call each other and Package Registry through the Gateway, and apply the 5 s task timeout and the 50-task limit. User Management's access tokens now carry `roles`, which the Gateway forwards as `X-Auth-Roles`. Map adds the live SSE stream `GET /api/v1/map/stream`. Details, Postman changes and open items are in [docs/lab-2-contract-madalina.md](docs/lab-2-contract-madalina.md).
+
+```sh
+npx newman run postman/user-management-service.postman_collection.json -e postman/local.postman_environment.json \
+  --env-var "map_service_token=<MAP_SERVICE_TOKEN from .env>" --env-var "battle_service_token=<BATTLE_SERVICE_TOKEN from .env>"
+npx newman run postman/map-service.postman_collection.json -e postman/local.postman_environment.json
+curl -N http://localhost:8080/api/v1/map/stream -H "Authorization: Bearer <access token from POST /api/v1/auth/login>"
+```
+
+The `0.3.0` images of these two services are not on Docker Hub yet, so this part of the stack starts only after they are published.
+
 ## Lab 1 — Running the whole system
 
 All eight services are published on Docker Hub and started together by one Compose file. This section is the entry point for Lab 1. The owner sections below give per-service details.

@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "User Management Lab 1 regression suite",
-    "description": "Every User Management endpoint against the seeded data (AUTH_MODE=mock: X-Mock-User-Id / X-Service-Name). Seed users: Alice (user_id), Bob and Carol; password password123. Safe to run repeatedly.",
+    "name": "User Management Lab 2 regression suite (through the gateway)",
+    "description": "Every User Management endpoint, called through the gateway (gateway_base_url, default http://localhost:8080). The first request logs Alice in; public requests send her bearer token, internal requests the map or battle service token (map_service_token / battle_service_token, the values of MAP_SERVICE_TOKEN / BATTLE_SERVICE_TOKEN in .env). Seed: Alice (user_id) and Bob are friends, Carol has marked Bob as an enemy. Safe to run repeatedly.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -10,8 +10,16 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "if (pm.environment.get('user_management_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('user_management_base_url'));",
-          "pm.collectionVariables.set('now', new Date().toISOString());"
+          "if (pm.environment.get('gateway_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('gateway_base_url'));",
+          "['map_service_token', 'battle_service_token'].forEach((key) => { if (pm.environment.get(key)) pm.collectionVariables.set(key, pm.environment.get(key)); });",
+          "pm.collectionVariables.set('now', new Date().toISOString());",
+          "// Each run logs Alice in again through the gateway before its first request.",
+          "if (pm.info.requestName === 'Health (gateway)') pm.collectionVariables.unset('alice_token');",
+          "if (!pm.collectionVariables.get('alice_token')) {",
+          "  pm.sendRequest({ url: pm.collectionVariables.get('base_url') + '/api/v1/auth/login', method: 'POST', header: { 'Content-Type': 'application/json' },",
+          "    body: { mode: 'raw', raw: JSON.stringify({ email: 'alice@example.com', password: pm.collectionVariables.get('demo_password') }) } },",
+          "    (err, res) => { if (!err && res.code === 200) pm.collectionVariables.set('alice_token', res.json().access_token); else console.warn('Alice login failed', err || res.code); });",
+          "}"
         ]
       }
     }
@@ -19,7 +27,27 @@
   "variable": [
     {
       "key": "base_url",
-      "value": "http://localhost:8085"
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "demo_password",
+      "value": "password123"
+    },
+    {
+      "key": "map_service_token",
+      "value": ""
+    },
+    {
+      "key": "battle_service_token",
+      "value": ""
+    },
+    {
+      "key": "alice_token",
+      "value": ""
+    },
+    {
+      "key": "new_user_token",
+      "value": ""
     },
     {
       "key": "user_id",
@@ -40,7 +68,7 @@
   ],
   "item": [
     {
-      "name": "Health",
+      "name": "Health (gateway)",
       "event": [
         {
           "listen": "test",
@@ -48,7 +76,7 @@
             "type": "text/javascript",
             "exec": [
               "pm.test('status 200', () => pm.response.to.have.status(200));",
-              "pm.test('ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+              "pm.test('gateway ok', () => pm.expect(pm.response.json()).to.include({ status: 'ok', service: 'gateway' }));"
             ]
           }
         }
@@ -60,7 +88,7 @@
       }
     },
     {
-      "name": "Missing auth is 401",
+      "name": "Missing access token is 401 (gateway)",
       "event": [
         {
           "listen": "test",
@@ -68,7 +96,7 @@
             "type": "text/javascript",
             "exec": [
               "pm.test('status 401', () => pm.response.to.have.status(401));",
-              "pm.test('error code UNAUTHENTICATED', () => pm.expect(pm.response.json().code).to.eql('UNAUTHENTICATED'));"
+              "pm.test('refused by the gateway', () => pm.expect(pm.response.json().code).to.eql('UNAUTHORIZED'));"
             ]
           }
         }
@@ -97,8 +125,8 @@
         "method": "GET",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           }
         ],
         "url": "{{base_url}}/api/v1/users/me"
@@ -154,6 +182,35 @@
       }
     },
     {
+      "name": "Login (new user)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('new_user_token', pm.response.json().access_token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{new_username}}@example.com\",\n  \"password\": \"correct-horse-1\"\n}"
+        }
+      }
+    },
+    {
       "name": "Register with unknown field is 422",
       "event": [
         {
@@ -203,7 +260,10 @@
               "const tokens = pm.response.json();",
               "pm.test('bearer tokens', () => pm.expect(tokens.token_type).to.eql('Bearer'));",
               "pm.collectionVariables.set('access_token', tokens.access_token);",
-              "pm.collectionVariables.set('refresh_token', tokens.refresh_token);"
+              "pm.collectionVariables.set('refresh_token', tokens.refresh_token);",
+              "const claimsOf = (token) => { const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');",
+              "  return JSON.parse(CryptoJS.enc.Base64.parse(part + '='.repeat((4 - part.length % 4) % 4)).toString(CryptoJS.enc.Utf8)); };",
+              "pm.test('no roles for an ordinary user', () => pm.expect(claimsOf(tokens.access_token).roles).to.eql([]));"
             ]
           }
         }
@@ -225,6 +285,37 @@
               "language": "json"
             }
           }
+        }
+      }
+    },
+    {
+      "name": "Login (seeded admin) has the admin role",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const claimsOf = (token) => { const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');",
+              "  return JSON.parse(CryptoJS.enc.Base64.parse(part + '='.repeat((4 - part.length % 4) % 4)).toString(CryptoJS.enc.Utf8)); };",
+              "pm.test('roles: admin, forwarded by the gateway as X-Auth-Roles', () => pm.expect(claimsOf(pm.response.json().access_token).roles).to.eql(['admin']));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"{{demo_password}}\"\n}"
         }
       }
     },
@@ -325,8 +416,8 @@
         "method": "GET",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           }
         ],
         "url": "{{base_url}}/api/v1/users/{{bob_id}}"
@@ -350,8 +441,8 @@
         "method": "PATCH",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -392,8 +483,8 @@
         "method": "GET",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           }
         ],
         "url": "{{base_url}}/api/v1/relationships"
@@ -417,8 +508,8 @@
         "method": "GET",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           }
         ],
         "url": "{{base_url}}/api/v1/friendships?limit=10"
@@ -443,8 +534,8 @@
         "method": "POST",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -485,8 +576,8 @@
         "method": "PUT",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{new_user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{new_user_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -526,8 +617,8 @@
         "method": "DELETE",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -555,8 +646,8 @@
         "method": "PUT",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -597,8 +688,8 @@
         "method": "PUT",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -638,8 +729,8 @@
         "method": "DELETE",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -667,8 +758,8 @@
         "method": "GET",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           }
         ],
         "url": "{{base_url}}/api/v1/wallets"
@@ -692,8 +783,8 @@
         "method": "GET",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           }
         ],
         "url": "{{base_url}}/api/v1/wallet-entries?limit=5"
@@ -716,8 +807,8 @@
         "method": "GET",
         "header": [
           {
-            "key": "X-Service-Name",
-            "value": "map"
+            "key": "Authorization",
+            "value": "Bearer {{map_service_token}}"
           }
         ],
         "url": "{{base_url}}/internal/v1/users/{{user_id}}"
@@ -741,8 +832,8 @@
         "method": "GET",
         "header": [
           {
-            "key": "X-Service-Name",
-            "value": "map"
+            "key": "Authorization",
+            "value": "Bearer {{map_service_token}}"
           }
         ],
         "url": "{{base_url}}/internal/v1/users/{{user_id}}/relationships"
@@ -766,8 +857,8 @@
         "method": "POST",
         "header": [
           {
-            "key": "X-Service-Name",
-            "value": "map"
+            "key": "Authorization",
+            "value": "Bearer {{map_service_token}}"
           },
           {
             "key": "Content-Type",
@@ -804,8 +895,8 @@
         "method": "POST",
         "header": [
           {
-            "key": "X-Service-Name",
-            "value": "battle"
+            "key": "Authorization",
+            "value": "Bearer {{battle_service_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -845,8 +936,8 @@
         "method": "POST",
         "header": [
           {
-            "key": "X-Service-Name",
-            "value": "map"
+            "key": "Authorization",
+            "value": "Bearer {{map_service_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -870,15 +961,15 @@
       }
     },
     {
-      "name": "Internal: local wallet operation (package A backend)",
+      "name": "Internal: a user token is refused (gateway)",
       "event": [
         {
           "listen": "test",
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('status 200', () => pm.response.to.have.status(200));",
-              "pm.test('local currency', () => pm.expect(pm.response.json().entries[0].currency).to.eql('local'));"
+              "pm.test('status 401', () => pm.response.to.have.status(401));",
+              "pm.test('refused by the gateway', () => pm.expect(pm.response.json().code).to.eql('UNAUTHORIZED'));"
             ]
           }
         }
@@ -887,8 +978,8 @@
         "method": "POST",
         "header": [
           {
-            "key": "X-Service-Name",
-            "value": "package:{{package_a}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           },
           {
             "key": "Idempotency-Key",
