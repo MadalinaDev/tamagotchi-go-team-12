@@ -10,7 +10,15 @@ This addendum describes **tamagotchi-monster-raid-service:0.3.1** and **tamagotc
 - **Gateway secret (0.3.1).** With `GATEWAY_SECRET` set, every request must carry the gateway's matching `X-Gateway-Secret`, checked before anything else, otherwise `401`. The comparison is constant-time. Empty means not checked, which is the compose default until the gateway runs there.
 - **Outgoing calls.** Calls to other services go to `GATEWAY_URL` (`http://gateway-service:8080`), never to another service's host. Every call sends `X-Service-Name: monster-raid` or `X-Service-Name: package-registry`, plus `SERVICE_TOKEN` as `Authorization: Bearer` when it is set. Each attempt has a 2 s timeout, with one retry for reads and idempotent commands. An unreachable dependency becomes `503 DEPENDENCY_UNAVAILABLE`, and business errors keep the dependency's status and code.
 - **Seed (Package Registry 0.3.1).** With `SEED_ON_START=true` (set in compose), Package Registry seeds PetHub `…00a1` and MoodPets `…00a2` with care definitions v1, the registrations Alice → both, Bob → PetHub, Carol → MoodPets, and Big Slime `…00d1` v1. It only seeds empty tables (see [`db/seed.md`](../db/seed.md)). Tamagotchi and Battle need these packages to create and reserve pets.
-- **Mocks.** `USE_MOCKS=true` (the compose default for now) keeps the Lab 1 in-process mocks. With `USE_MOCKS=false`, `MOCK_DEPENDENCIES` keeps single dependencies mocked, e.g. `MOCK_DEPENDENCIES=tamagotchi` while Tamagotchi does not serve reservations and settlements.
+- **Real calls and remaining mocks.** In the team compose file both services run with `USE_MOCKS=false`, and `MOCK_DEPENDENCIES` keeps single dependencies mocked:
+
+  | Service | Real, through the gateway | Still mocked | Why |
+  | --- | --- | --- | --- |
+  | Package Registry | User Management (`GET /internal/v1/users/{id}`), Guild (`GET /internal/v1/guilds/{id}`) | — | — |
+  | Monster Raid | Guild (guild, membership), Package Registry (raid and care definitions) | Tamagotchi | Tamagotchi 0.3.0 answers `403 SERVICE_FORBIDDEN` to `monster-raid` on its internal routes |
+  | Monster Raid | | User Management (wallet settlements) | User Management 0.1.1 checks raid rewards against its own mock raid definition and rejects the real one (`reward_per_recipient does not match the pinned raid definition`), which would leave every won raid in `settling` |
+
+  Checked in the full team stack: a package with a newly registered user as developer is accepted (only the real User Management knows that user), the Guild service logs Monster Raid's membership checks and Package Registry's guild lookups, a raid played to the kill ends `completed`, and all eight Postman collections pass.
 
 ## Task timeout and concurrent task limit (both services)
 
@@ -101,5 +109,7 @@ MadalinaDev/gateway-service#3 (Sabina's gateway part: Raid/Registry routes and t
 
 | Item | Depends on |
 | --- | --- |
-| Run `USE_MOCKS=false` in the compose file. Monster Raid → Package Registry through the gateway already works end to end (see MadalinaDev/gateway-service#3). | The internal routes above served by their owners and checked in this stack |
+| Monster Raid → Tamagotchi for real (pets, reservations, settlements) | Tamagotchi allowing `monster-raid` on its internal routes (Sava) |
+| Monster Raid → User Management wallet settlements for real | User Management checking raid rewards against Package Registry's raid definitions instead of its mock (Mădălina) |
+| The published `madalina060504/tamagotchi-gateway-service:0.3.0` predates gateway-service#3 and #5; compose still uses Sava's temporary build | A new gateway `dev` → `main` release (Mădălina) |
 | Admins recognised from the token. User Management's access tokens (0.1.1) carry only `sub`, `iss`, `aud`, `iat`, `exp` and `jti`, with no roles. In the meantime the gateway treats the users in `GATEWAY_ADMIN_USER_IDS` (the seeded admin `…0009`) as `admin`. | A roles claim in User Management's access token (Mădălina) |

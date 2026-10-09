@@ -33,7 +33,7 @@ The limits are Go middleware around `/api` and `/internal`: a buffered semaphore
 - **No late writes:** the handler writes into a buffer, so a late handler never writes over the `504`.
 - **Slots:** a timed-out request keeps its slot until its work really finishes, so the limit always counts the work in flight. This is the same rule as Sabina's interceptor.
 - **Not limited:** `/health` and open chat sockets. Each `chat.send` on a socket has its own 5 s deadline.
-- **Status code:** this is `503` as in the Lab 2 conventions draft, the gateway and Sabina's services. [`lab-2-conventions.md`](lab-2-conventions.md) currently says `429`; the team should settle on one code.
+- **Status code:** `503`, the team rule in [`lab-2-conventions.md`](lab-2-conventions.md), as in the gateway and Sabina's services.
 
 ## Guild — WebSocket chat (grade 7)
 
@@ -121,5 +121,4 @@ The stack was a fresh volume, with Guild and Notification `0.3.0` pulled from Do
 
 | Item | Depends on |
 | --- | --- |
-| One status code for the concurrent task limit (`503` here, in the gateway and in Sabina's services; `429` in `lab-2-conventions.md`) | Team decision |
 | `GuildInvited` and the other events over RabbitMQ with an outbox | Later lab |
