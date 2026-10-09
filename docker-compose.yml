@@ -290,12 +290,10 @@ services:
       GATEWAY_URL: http://gateway-service:8080
       SERVICE_TOKEN: ${RAID_SERVICE_TOKEN}
       USE_MOCKS: "false"
-      # Guild and Package Registry are real. Still mocked:
-      # - Tamagotchi 0.3.0 rejects every raid reservation of a user who has a
-      #   secondary pet selected (409 with secondary_pet_id null, 422 with it);
-      # - User Management 0.1.1 checks raid rewards against its own mock raid
-      #   definition, so wallet settlements are rejected.
-      MOCK_DEPENDENCIES: tamagotchi,user-management
+      # Guild, Package Registry and User Management are real. Still mocked:
+      # Tamagotchi 0.3.0 rejects every raid reservation of a user who has a
+      # secondary pet selected (409 with secondary_pet_id null, 422 with it).
+      MOCK_DEPENDENCIES: tamagotchi
       # Same secret as the gateway: requests without X-Gateway-Secret get 401.
       GATEWAY_SECRET: ${GATEWAY_SECRET}
     # Lab 2: no host port; reachable only through gateway-service.
