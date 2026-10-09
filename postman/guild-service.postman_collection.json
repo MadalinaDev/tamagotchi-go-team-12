@@ -1,30 +1,245 @@
 {
   "info": {
     "name": "guild-service",
-    "description": "Guild service (Vica), Lab 1. Runs against the seeded data (SEED_ON_START=true): guild Founders {{founders_guild_id}} with leader Alice ({{user_id}}) and members Bob and Carol. Run the whole collection in order with the Collection Runner; it leaves the seeded state as it found it, so it can be re-run. Auth is mocked: X-Mock-User-Id selects the caller. Internal routes only need X-Service-Name. User Management and Package Registry are mocked: Alice and Bob are friends and share package A; Carol and the admin user have no friends.",
+    "description": "Guild service (Vica), Lab 2. All REST requests go through the gateway ({{base_url}}): the collection logs Alice, Bob, Carol and the admin user in and sends their access tokens; internal requests send {{service_token}} (set it to one of the *_SERVICE_TOKEN values from .env). Runs against the seeded guild Founders (Alice leader, Bob and Carol members) and leaves it as seeded, so it can be re-run. The chat WebSocket itself is not proxied: the gateway answers GET .../ws with a direct ws_url to Guild (see the README); Postman checks the ticket and the negotiation.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.environment.get('gateway_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('gateway_base_url'));",
+          "if (pm.environment.get('service_token')) pm.collectionVariables.set('service_token', pm.environment.get('service_token'));"
+        ]
+      }
+    }
+  ],
   "item": [
     {
-      "name": "Seeded guild (Founders)",
+      "name": "Login (gateway)",
       "item": [
         {
-          "name": "Health",
+          "name": "Login Alice",
           "request": {
-            "method": "GET",
+            "method": "POST",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
               }
             ],
             "url": {
-              "raw": "{{base_url}}/health",
+              "raw": "{{base_url}}/api/v1/auth/login",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "health"
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"alice@example.com\",\n  \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token_alice\", pm.response.json().access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Bob",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"bob@example.com\",\n  \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token_bob\", pm.response.json().access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Carol",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"carol@example.com\",\n  \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token_carol\", pm.response.json().access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token_admin\", pm.response.json().access_token);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gateway protection",
+      "item": [
+        {
+          "name": "No token -> 401 at the gateway",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{founders_guild_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{founders_guild_id}}"
               ]
             }
           },
@@ -34,20 +249,64 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test(\"error body\", () => { const b = pm.response.json(); pm.expect(b.code).to.be.a(\"string\"); pm.expect(b.request_id).to.eql(pm.response.headers.get(\"X-Request-ID\")); });"
                 ]
               }
             }
           ]
         },
         {
+          "name": "Direct call to Guild with a forged identity -> 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Auth-User-Id",
+                "value": "{{alice_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{guild_direct_url}}/api/v1/guilds/{{founders_guild_id}}",
+              "host": [
+                "{{guild_direct_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{founders_guild_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test(\"error body\", () => { const b = pm.response.json(); pm.expect(b.code).to.be.a(\"string\"); pm.expect(b.request_id).to.eql(pm.response.headers.get(\"X-Request-ID\")); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Seeded guild (Founders)",
+      "item": [
+        {
           "name": "List guilds",
           "request": {
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               }
             ],
             "url": {
@@ -74,7 +333,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -86,8 +346,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               }
             ],
             "url": {
@@ -109,7 +369,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -121,8 +382,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               }
             ],
             "url": {
@@ -145,7 +406,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -157,8 +419,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -197,7 +459,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -209,8 +472,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -249,7 +512,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -266,8 +530,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -306,6 +570,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
                   "if (pm.response.code === 201) pm.collectionVariables.set(\"guild_id\", pm.response.json().guild_id);"
                 ]
               }
@@ -318,8 +583,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
               }
             ],
             "url": {
@@ -341,7 +606,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -353,8 +619,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -394,7 +660,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));"
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test(\"error body\", () => { const b = pm.response.json(); pm.expect(b.code).to.be.a(\"string\"); pm.expect(b.request_id).to.eql(pm.response.headers.get(\"X-Request-ID\")); });"
                 ]
               }
             }
@@ -406,8 +674,8 @@
             "method": "DELETE",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{admin_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -450,8 +718,8 @@
             "method": "DELETE",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{bob_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_bob}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -486,13 +754,13 @@
           ]
         },
         {
-          "name": "Invite Bob (leader/officer)",
+          "name": "Invite Bob (friendship checked in User Management)",
           "request": {
             "method": "POST",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -533,6 +801,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
                   "if (pm.response.code === 201) pm.collectionVariables.set(\"invite_id\", pm.response.json().invite_id);"
                 ]
               }
@@ -545,8 +814,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{bob_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_bob}}"
               }
             ],
             "url": {
@@ -567,7 +836,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -579,8 +849,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{bob_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_bob}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -620,7 +890,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -632,8 +903,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -674,6 +945,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
                   "if (pm.response.code === 201) pm.collectionVariables.set(\"invite_id\", pm.response.json().invite_id);"
                 ]
               }
@@ -686,8 +958,8 @@
             "method": "DELETE",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -725,8 +997,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -767,6 +1039,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
                   "if (pm.response.code === 201) pm.collectionVariables.set(\"invite_id\", pm.response.json().invite_id);"
                 ]
               }
@@ -779,8 +1052,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{bob_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_bob}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -820,7 +1093,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -832,8 +1106,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -874,7 +1148,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -886,8 +1161,8 @@
             "method": "PATCH",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -928,7 +1203,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -940,8 +1216,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -981,7 +1257,64 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));"
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test(\"error body\", () => { const b = pm.response.json(); pm.expect(b.code).to.be.a(\"string\"); pm.expect(b.request_id).to.eql(pm.response.headers.get(\"X-Request-ID\")); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invite unknown user -> 404 (User Management)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{founders_guild_id}}/invites",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{founders_guild_id}}",
+                "invites"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invitee_id\": \"00000000-0000-4000-8000-0000000000ff\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test(\"error body\", () => { const b = pm.response.json(); pm.expect(b.code).to.be.a(\"string\"); pm.expect(b.request_id).to.eql(pm.response.headers.get(\"X-Request-ID\")); });"
                 ]
               }
             }
@@ -993,8 +1326,8 @@
             "method": "DELETE",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -1034,8 +1367,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -1076,6 +1409,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
                   "if (pm.response.code === 201) pm.collectionVariables.set(\"invite_id\", pm.response.json().invite_id);"
                 ]
               }
@@ -1088,8 +1422,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{bob_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_bob}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -1129,7 +1463,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -1138,7 +1473,7 @@
       ]
     },
     {
-      "name": "Messages (REST chat)",
+      "name": "Messages (REST history and send)",
       "item": [
         {
           "name": "Send message (Bob)",
@@ -1146,8 +1481,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{bob_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_bob}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -1188,6 +1523,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
                   "if (pm.response.code === 201) pm.collectionVariables.set(\"message_id\", pm.response.json().message_id);"
                 ]
               }
@@ -1200,8 +1536,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               },
               {
                 "key": "Idempotency-Key",
@@ -1241,7 +1577,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -1253,8 +1590,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               }
             ],
             "url": {
@@ -1283,7 +1620,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -1295,8 +1633,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Mock-User-Id",
-                "value": "{{user_id}}"
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
               }
             ],
             "url": {
@@ -1325,7 +1663,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -1334,7 +1673,167 @@
       ]
     },
     {
-      "name": "Internal (other services)",
+      "name": "WebSocket chat (ticket and negotiation)",
+      "item": [
+        {
+          "name": "Get chat ticket (member)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{founders_guild_id}}/chat-tickets",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{founders_guild_id}}",
+                "chat-tickets"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set(\"ticket\", pm.response.json().ticket);",
+                  "pm.test(\"30 s single-use ticket\", () => { const b = pm.response.json(); pm.expect(b.ticket).to.have.length(43); pm.expect(new Date(b.expires_at) > new Date()).to.be.true; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Negotiate socket -> direct Guild ws_url",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{founders_guild_id}}/ws?ticket={{ticket}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{founders_guild_id}}",
+                "ws"
+              ],
+              "query": [
+                {
+                  "key": "ticket",
+                  "value": "{{ticket}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test(\"direct ws_url to Guild\", () => pm.expect(pm.response.json().ws_url).to.match(/^wss?:\\/\\/.+\\/api\\/v1\\/guilds\\/.+\\/ws\\?ticket=.+/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ticket for a non-member -> 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/guilds/{{founders_guild_id}}/chat-tickets",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "guilds",
+                "{{founders_guild_id}}",
+                "chat-tickets"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test(\"error body\", () => { const b = pm.response.json(); pm.expect(b.code).to.be.a(\"string\"); pm.expect(b.request_id).to.eql(pm.response.headers.get(\"X-Request-ID\")); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Internal (service token)",
       "item": [
         {
           "name": "Internal: get guild",
@@ -1342,8 +1841,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Service-Name",
-                "value": "package-registry"
+                "key": "Authorization",
+                "value": "Bearer {{service_token}}"
               }
             ],
             "url": {
@@ -1365,7 +1864,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
                 ]
               }
             }
@@ -1377,8 +1877,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Service-Name",
-                "value": "notification"
+                "key": "Authorization",
+                "value": "Bearer {{service_token}}"
               }
             ],
             "url": {
@@ -1401,7 +1901,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test(\"three seeded members\", () => pm.expect(pm.response.json().members).to.have.length(3));"
                 ]
               }
             }
@@ -1413,8 +1915,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Service-Name",
-                "value": "monster-raid"
+                "key": "Authorization",
+                "value": "Bearer {{service_token}}"
               }
             ],
             "url": {
@@ -1438,7 +1940,45 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Internal without service token -> 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_alice}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/internal/v1/guilds/{{founders_guild_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "internal",
+                "v1",
+                "guilds",
+                "{{founders_guild_id}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"request id\", () => pm.expect(pm.response.headers.get(\"X-Request-ID\")).to.match(/^[0-9a-f-]{36}$/));",
+                  "pm.test(\"error body\", () => { const b = pm.response.json(); pm.expect(b.code).to.be.a(\"string\"); pm.expect(b.request_id).to.eql(pm.response.headers.get(\"X-Request-ID\")); });"
                 ]
               }
             }
@@ -1450,15 +1990,15 @@
   "variable": [
     {
       "key": "base_url",
-      "value": "http://localhost:8083"
+      "value": "http://localhost:8080"
     },
     {
-      "key": "user_id",
+      "key": "service_token",
+      "value": ""
+    },
+    {
+      "key": "alice_id",
       "value": "00000000-0000-4000-8000-000000000001"
-    },
-    {
-      "key": "admin_id",
-      "value": "00000000-0000-4000-8000-000000000009"
     },
     {
       "key": "bob_id",
@@ -1469,8 +2009,32 @@
       "value": "00000000-0000-4000-8000-000000000003"
     },
     {
+      "key": "admin_id",
+      "value": "00000000-0000-4000-8000-000000000009"
+    },
+    {
+      "key": "token_alice",
+      "value": ""
+    },
+    {
+      "key": "token_bob",
+      "value": ""
+    },
+    {
+      "key": "token_carol",
+      "value": ""
+    },
+    {
+      "key": "token_admin",
+      "value": ""
+    },
+    {
       "key": "founders_guild_id",
       "value": "00000000-0000-4000-8000-0000000000c1"
+    },
+    {
+      "key": "guild_direct_url",
+      "value": "http://localhost:8083"
     },
     {
       "key": "guild_id",
@@ -1482,6 +2046,10 @@
     },
     {
       "key": "message_id",
+      "value": ""
+    },
+    {
+      "key": "ticket",
       "value": ""
     }
   ]
