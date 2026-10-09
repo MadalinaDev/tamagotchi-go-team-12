@@ -29,9 +29,8 @@ are marked; where this page is stricter (error semantics), HTTP semantics win.
   service and Gateway. Saturation returns **503**
   `TOO_MANY_CONCURRENT_TASKS` with `Retry-After: 1`, as in the team draft
   (a temporarily overloaded server, RFC 9110 §15.6.4; 429 is for a client
-  that sent too many requests). The Gateway (since gateway-service#3),
-  Monster Raid and Package Registry answer 503; services that still answer
-  429 should switch. Upstream outage → `503`,
+  that sent too many requests). The Gateway (since gateway-service#3) and
+  every service answer 503. Upstream outage → `503`,
   upstream timeout → `504`. Errors use the contract envelope with UUID
   `request_id` and `details: []`.
 - Guild WebSocket: client tickets through the Gateway; `GET .../ws` returns a
@@ -78,3 +77,20 @@ are marked; where this page is stricter (error semantics), HTTP semantics win.
 - Task controls: 5 s (`504 TASK_TIMEOUT`) and 50 concurrent tasks, answered
   with **503** `TOO_MANY_CONCURRENT_TASKS` and `Retry-After: 1`, as the rule
   above requires.
+
+## Mădălina status
+
+- User Management and Map `0.3.0` (+ `latest`) are published by each
+  repository's CI on merge to `main`; details in
+  [lab-2-contract-madalina.md](lab-2-contract-madalina.md).
+- Both read the Gateway identity headers and require `X-Gateway-Secret`,
+  except `/health` and User Management's JWKS, which the Gateway fetches
+  directly. Both are `expose:` only.
+- Outbound calls go through the Gateway with the service token:
+  Map → User Management, User Management → Package Registry.
+- User Management access tokens carry `roles` (`["admin"]` for the global
+  admin), which the Gateway forwards as `X-Auth-Roles`.
+- Map pushes the caller's visible users over SSE:
+  `GET /api/v1/map/stream`, through the Gateway.
+- Task controls: 5 s (`504 TASK_TIMEOUT`) and 50 concurrent tasks, answered
+  with **503** `TOO_MANY_CONCURRENT_TASKS` and `Retry-After: 1`.

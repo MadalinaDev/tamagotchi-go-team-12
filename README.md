@@ -14,6 +14,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Contribution workflow](#contribution-workflow)
 - [Lab 2 — Running through the Gateway](#lab-2--running-through-the-gateway)
 - [Lab 2 — Vica's services behind the Gateway](#lab-2--vicas-services-behind-the-gateway)
+- [Lab 2 — User Management and Map behind the Gateway](#lab-2--user-management-and-map-behind-the-gateway)
 - [Lab 1 — Running the whole system](#lab-1--running-the-whole-system)
 - [Lab 1 — Running Sava's services](#lab-1--running-savas-services)
 - [Lab 1 — Running User Management and Map](#lab-1--running-user-management-and-map)
@@ -576,7 +577,8 @@ Lab 2 puts the Python Gateway in front of every REST call: port **8080** is the
 only REST entry point. The Gateway validates `Authorization: Bearer <JWT>`
 (User Management RS256 via JWKS), strips it, and forwards trusted identity
 headers plus `X-Gateway-Secret`. Migrated services (`Battle`, `Tamagotchi`
-`0.3.0` with `AUTH_MODE=gateway`; `Monster Raid`, `Package Registry` `0.3.1`)
+`0.3.0` with `AUTH_MODE=gateway`; `Monster Raid`, `Package Registry` `0.3.1`;
+`Guild`, `Notification`, `User Management`, `Map` `0.3.0`)
 trust only those headers, call each other only through the Gateway, and have
 a 5 s task timeout and a 50-task concurrency limit; their REST ports are
 internal-only.
@@ -643,18 +645,31 @@ npx newman run postman/guild-service.postman_collection.json -e postman/local.po
 npx newman run postman/notification-service.postman_collection.json -e postman/local.postman_environment.json --env-var service_token=<token>
 ```
 
-### User Management and Map (Mădălina)
+## Lab 2 — User Management and Map behind the Gateway
 
-User Management and Map `0.3.0` run behind the Gateway with `AUTH_MODE=gateway` and `USE_MOCKS=false`. They trust `X-Auth-User-Id` / `X-Service-Name` only together with `X-Gateway-Secret`, call each other and Package Registry through the Gateway, and apply the 5 s task timeout and the 50-task limit. User Management's access tokens now carry `roles`, which the Gateway forwards as `X-Auth-Roles`. Map adds the live SSE stream `GET /api/v1/map/stream`. Details, Postman changes and open items are in [docs/lab-2-contract-madalina.md](docs/lab-2-contract-madalina.md).
+Mădălina's User Management and Map `0.3.0` follow the [Lab 2 conventions](docs/lab-2-conventions.md). The details and what was verified are in the [Lab 2 contract notes](docs/lab-2-contract-madalina.md).
+
+**Images (public, `0.3.0` + `latest`), published by each repository's CI on merge to `main`:**
+
+- [`madalina060504/tamagotchi-user-management-service:0.3.0`](https://hub.docker.com/r/madalina060504/tamagotchi-user-management-service)
+- [`madalina060504/tamagotchi-map-service:0.3.0`](https://hub.docker.com/r/madalina060504/tamagotchi-map-service)
+
+**What changed:**
+
+- **Gateway headers.** Both services accept REST only from the gateway: `X-Auth-User-Id` (or `X-Service-Name` on User Management's internal routes), together with `X-Gateway-Secret`. `X-Mock-User-Id` is gone. Only `/health` and User Management's JWKS, which the gateway fetches directly, skip the secret.
+- **Ports.** Both are `expose:` only.
+- **Calls through the gateway.** Outgoing calls use the service token and are real in the compose file (`USE_MOCKS=false`): Map → User Management and User Management → Package Registry.
+- **Roles in the access token (grade 10).** Tokens carry `roles` (`["admin"]` for the global admin, `[]` otherwise), which the gateway forwards as `X-Auth-Roles`. The gateway's interim `GATEWAY_ADMIN_USER_IDS` bridge is no longer needed for the seeded admin.
+- **Live nearby users over SSE (grade 7).** `GET /api/v1/map/stream` goes through the gateway and pushes the caller's visible users whenever they change (`users`, `error` and `ping` events).
+- **Task controls (grade 8).** 5 s deadline (`504 TASK_TIMEOUT`) and 50 concurrent tasks (`503 TOO_MANY_CONCURRENT_TASKS`, `Retry-After: 1`) in both services. The SSE stream is exempt.
+
+**Verify** (after `docker compose up -d --wait`). The service tokens are the `MAP_SERVICE_TOKEN` and `BATTLE_SERVICE_TOKEN` values from `.env`:
 
 ```sh
-npx newman run postman/user-management-service.postman_collection.json -e postman/local.postman_environment.json \
-  --env-var "map_service_token=<MAP_SERVICE_TOKEN from .env>" --env-var "battle_service_token=<BATTLE_SERVICE_TOKEN from .env>"
+npx newman run postman/user-management-service.postman_collection.json -e postman/local.postman_environment.json   --env-var map_service_token=<token> --env-var battle_service_token=<token>
 npx newman run postman/map-service.postman_collection.json -e postman/local.postman_environment.json
 curl -N http://localhost:8080/api/v1/map/stream -H "Authorization: Bearer <access token from POST /api/v1/auth/login>"
 ```
-
-The `0.3.0` images of these two services are not on Docker Hub yet, so this part of the stack starts only after they are published.
 
 ## Lab 1 — Running the whole system
 

@@ -21,9 +21,9 @@ A global NestJS interceptor bounds every route except `/health` and Map's stream
 | Limit | Value | When reached |
 | --- | --- | --- |
 | Task timeout | `TASK_TIMEOUT_MS=5000` | `504 TASK_TIMEOUT` |
-| Concurrent task limit | `MAX_CONCURRENT_TASKS=50` requests in flight | `429 TOO_MANY_CONCURRENT_TASKS` with `Retry-After: 1`, refused at once instead of queued |
+| Concurrent task limit | `MAX_CONCURRENT_TASKS=50` requests in flight | `503 TOO_MANY_CONCURRENT_TASKS` with `Retry-After: 1`, refused at once instead of queued |
 
-`429` follows the [Lab 2 conventions](lab-2-conventions.md) and the gateway. A request that timed out keeps its slot until its work really finishes, because a transaction cannot be cut off halfway. If that work then succeeds, its result is stored under the request's `Idempotency-Key`, so a retry with the same key returns it instead of repeating it.
+`503` follows the [Lab 2 conventions](lab-2-conventions.md): an overloaded service is a server condition, not a client error, as in the gateway and every other service. A request that timed out keeps its slot until its work really finishes, because a transaction cannot be cut off halfway. If that work then succeeds, its result is stored under the request's `Idempotency-Key`, so a retry with the same key returns it instead of repeating it.
 
 ## Live nearby users over SSE (Map, grade 7)
 
@@ -84,7 +84,8 @@ Each repository has `.github/workflows/ci.yml`. Pull requests into `dev` and `ma
 
 | Item | Depends on |
 | --- | --- |
-| The `0.3.0` images are **not published yet**, so `docker compose pull` and the smoke workflow fail on this branch until they are. | Docker Hub secrets in both repositories, then the release pull request `dev` → `main` (Mădălina) |
+| The `0.3.0` images are **not published yet**, so `docker compose pull` and the smoke workflow fail on this branch until they are. The Docker Hub secrets are in place. | Merging MadalinaDev/user-management-service#1 and MadalinaDev/map-service#1, then the release `dev` → `main` in each repository (Mădălina) |
 | The submodule pointers still pin the Lab 1 commits. | The releases above |
 | Trusted package backends (`package:<package_id>`) cannot call `POST /internal/v1/wallets/local-operations` through the gateway: it only maps the eight team services to service tokens. User Management still binds such callers to their package. | Package-backend identities in the gateway |
-| The gateway image in the compose file is Sava's temporary build. | `madalina060504/tamagotchi-gateway-service:0.3.0` on Docker Hub (Mădălina) |
+| The compose file still runs Sava's temporary gateway image `ekkusuu/tamagotchi-gateway-service:0.3.0`. | MadalinaDev/gateway-service#8 and #9 (release `0.3.1`), then a one-line compose change and a submodule bump |
+| The gateway's interim `GATEWAY_ADMIN_USER_IDS` bridge is redundant for the seeded admin once User Management `0.3.0` issues `roles`. | This pull request; remove the bridge in a follow-up |
