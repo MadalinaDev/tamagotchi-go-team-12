@@ -15,10 +15,9 @@ This addendum describes **tamagotchi-monster-raid-service:0.3.2** and **tamagotc
   | Service | Real, through the gateway | Still mocked | Why |
   | --- | --- | --- | --- |
   | Package Registry | User Management (`GET /internal/v1/users/{id}`), Guild (`GET /internal/v1/guilds/{id}`) | — | — |
-  | Monster Raid | Guild (guild, membership), Package Registry (raid and care definitions) | Tamagotchi | Tamagotchi 0.3.0 rejects every raid reservation of a user who has a secondary pet selected: `409 TAMAGOTCHI_CONFLICT` with `secondary_pet_id: null` (raids use only the primary, Lab 0 contract), `422 INVALID_TAMAGOTCHI` with the secondary. The team smoke's Tamagotchi collection gives Alice a secondary pet, so no raid can be joined after it. Without a secondary pet the real path works end to end: reservation, busy-pet `409`, XP settlement (Ember XP 0 → 100, level 2) and release on the kill. |
-  | Monster Raid | | User Management (wallet settlements) | User Management 0.1.1 checks raid rewards against its own mock raid definition and rejects the real one (`reward_per_recipient does not match the pinned raid definition`), which would leave every won raid in `settling` |
+  | Monster Raid | Guild (guild, membership), Package Registry (raid and care definitions), User Management (wallet settlements, since User Management 0.3.0) | Tamagotchi | Tamagotchi 0.3.0 rejects every raid reservation of a user who has a secondary pet selected: `409 TAMAGOTCHI_CONFLICT` with `secondary_pet_id: null` (raids use only the primary, Lab 0 contract), `422 INVALID_TAMAGOTCHI` with the secondary. The team smoke's Tamagotchi collection gives Alice a secondary pet, so no raid can be joined after it. Without a secondary pet the real path works end to end: reservation, busy-pet `409`, XP settlement (Ember XP 0 → 100, level 2) and release on the kill. |
 
-  Checked in the full team stack: a package with a newly registered user as developer is accepted (only the real User Management knows that user), the Guild service logs Monster Raid's membership checks and Package Registry's guild lookups, a raid played to the kill ends `completed`, and all eight Postman collections pass.
+  User Management 0.3.0 also puts `roles` in its access tokens (the seeded admin gets `["admin"]`), so admin-only Registry routes no longer depend on the gateway's interim `GATEWAY_ADMIN_USER_IDS` list. With User Management 0.3.0, a won raid pays out through the real wallet (Alice's global balance 100 → 150 for Big Slime's reward of 50). Checked in the full team stack: a package with a newly registered user as developer is accepted (only the real User Management knows that user), the Guild service logs Monster Raid's membership checks and Package Registry's guild lookups, a raid played to the kill ends `completed`, and all eight Postman collections pass.
 
 ## Task timeout and concurrent task limit (both services)
 
@@ -111,6 +110,3 @@ MadalinaDev/gateway-service#3 (Sabina's gateway part: Raid/Registry routes and t
 | Item | Depends on |
 | --- | --- |
 | Monster Raid → Tamagotchi for real (pets, reservations, settlements) | Tamagotchi checking only `primary_pet_id` against the stored selection for `kind: "raid"` reservations (Sava) |
-| Monster Raid → User Management wallet settlements for real | User Management checking raid rewards against Package Registry's raid definitions instead of its mock (Mădălina) |
-| The published `madalina060504/tamagotchi-gateway-service:0.3.0` predates gateway-service#3 and #5; compose still uses Sava's temporary build | A new gateway `dev` → `main` release (Mădălina) |
-| Admins recognised from the token. User Management's access tokens (0.1.1) carry only `sub`, `iss`, `aud`, `iat`, `exp` and `jti`, with no roles. In the meantime the gateway treats the users in `GATEWAY_ADMIN_USER_IDS` (the seeded admin `…0009`) as `admin`. | A roles claim in User Management's access token (Mădălina) |
