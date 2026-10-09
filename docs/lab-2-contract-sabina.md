@@ -10,12 +10,14 @@ This addendum describes **tamagotchi-monster-raid-service:0.3.2** and **tamagotc
 - **Gateway secret (0.3.1).** With `GATEWAY_SECRET` set, every request must carry the gateway's matching `X-Gateway-Secret`, checked before anything else, otherwise `401`. The comparison is constant-time. Empty means not checked, which is the compose default until the gateway runs there.
 - **Outgoing calls.** Calls to other services go to `GATEWAY_URL` (`http://gateway-service:8080`), never to another service's host. Every call sends `X-Service-Name: monster-raid` or `X-Service-Name: package-registry`, plus `SERVICE_TOKEN` as `Authorization: Bearer` when it is set. Each attempt has a 2 s timeout, with one retry for reads and idempotent commands. An unreachable dependency becomes `503 DEPENDENCY_UNAVAILABLE`, and business errors keep the dependency's status and code.
 - **Seed (Package Registry 0.3.1).** With `SEED_ON_START=true` (set in compose), Package Registry seeds PetHub `…00a1` and MoodPets `…00a2` with care definitions v1, the registrations Alice → both, Bob → PetHub, Carol → MoodPets, and Big Slime `…00d1` v1. It only seeds empty tables (see [`db/seed.md`](../db/seed.md)). Tamagotchi and Battle need these packages to create and reserve pets.
-- **Real calls and remaining mocks.** In the team compose file both services run with `USE_MOCKS=false`, and `MOCK_DEPENDENCIES` keeps single dependencies mocked:
+- **Real calls, no mocks.** In the team compose file both services run with `USE_MOCKS=false` and no `MOCK_DEPENDENCIES`, so every service-to-service call goes through the gateway to the real service:
 
-  | Service | Real, through the gateway | Still mocked | Why |
-  | --- | --- | --- | --- |
-  | Package Registry | User Management (`GET /internal/v1/users/{id}`), Guild (`GET /internal/v1/guilds/{id}`) | — | — |
-  | Monster Raid | Guild (guild, membership), Package Registry (raid and care definitions), User Management (wallet settlements, since User Management 0.3.0) | Tamagotchi | Tamagotchi 0.3.0 rejects every raid reservation of a user who has a secondary pet selected: `409 TAMAGOTCHI_CONFLICT` with `secondary_pet_id: null` (raids use only the primary, Lab 0 contract), `422 INVALID_TAMAGOTCHI` with the secondary. The team smoke's Tamagotchi collection gives Alice a secondary pet, so no raid can be joined after it. Without a secondary pet the real path works end to end: reservation, busy-pet `409`, XP settlement (Ember XP 0 → 100, level 2) and release on the kill. |
+  | Service | Calls, through the gateway |
+  | --- | --- |
+  | Package Registry | User Management (`GET /internal/v1/users/{id}`), Guild (`GET /internal/v1/guilds/{id}`) |
+  | Monster Raid | Guild (guild, membership), Package Registry (raid and care definitions), Tamagotchi (pet, reservation, release, XP settlement), User Management (wallet settlements) |
+
+  Tamagotchi became real for Monster Raid once Tamagotchi 0.3.0 accepted raid reservations from users who have a secondary pet selected. Before that fix, a raid reservation got `409` with `secondary_pet_id: null` and `422` with the secondary. In the full stack, the Raid collection joins with Alice's real primary pet and plays the raid to the kill. Tamagotchi awards the XP (Ember: XP 0 → 200, level 3 after two runs) and frees the pet, leaving no reservation open.
 
   User Management 0.3.0 also puts `roles` in its access tokens (the seeded admin gets `["admin"]`), so admin-only Registry routes no longer depend on the gateway's interim `GATEWAY_ADMIN_USER_IDS` list. With User Management 0.3.0, a won raid pays out through the real wallet (Alice's global balance 100 → 150 for Big Slime's reward of 50). Checked in the full team stack: a package with a newly registered user as developer is accepted (only the real User Management knows that user), the Guild service logs Monster Raid's membership checks and Package Registry's guild lookups, a raid played to the kill ends `completed`, and all eight Postman collections pass.
 
@@ -107,6 +109,4 @@ MadalinaDev/gateway-service#3 (Sabina's gateway part: Raid/Registry routes and t
 
 ## Open items
 
-| Item | Depends on |
-| --- | --- |
-| Monster Raid → Tamagotchi for real (pets, reservations, settlements) | Tamagotchi checking only `primary_pet_id` against the stored selection for `kind: "raid"` reservations (Sava) |
+None for these two services.
