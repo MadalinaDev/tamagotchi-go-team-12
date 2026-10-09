@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Map Lab 1 regression suite",
-    "description": "Every Map endpoint (AUTH_MODE=mock: X-Mock-User-Id). The User Management mock follows the seed: Alice (user_id) and Bob are friends, Carol has marked Bob as an enemy. Safe to run repeatedly.",
+    "name": "Map Lab 2 regression suite (through the gateway)",
+    "description": "Every Map REST endpoint, called through the gateway (gateway_base_url, default http://localhost:8080) with Alice's, Bob's and Carol's bearer tokens, logged in before the first request. Map asks the real User Management (through the gateway) for relationships: Alice and Bob are friends, Carol has marked Bob as an enemy. The SSE route GET /api/v1/map/stream never ends, so it is checked with curl -N instead (see the Map README). Safe to run repeatedly.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -10,8 +10,14 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "if (pm.environment.get('map_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('map_base_url'));",
-          "pm.collectionVariables.set('now', new Date().toISOString());"
+          "if (pm.environment.get('gateway_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('gateway_base_url'));",
+          "pm.collectionVariables.set('now', new Date().toISOString());",
+          "// Each run logs the three seed users in again through the gateway before its first request.",
+          "if (pm.info.requestName === 'Health (gateway)') ['alice_token', 'bob_token', 'carol_token'].forEach((key) => pm.collectionVariables.unset(key));",
+          "const login = (name) => pm.sendRequest({ url: pm.collectionVariables.get('base_url') + '/api/v1/auth/login', method: 'POST', header: { 'Content-Type': 'application/json' },",
+          "  body: { mode: 'raw', raw: JSON.stringify({ email: name + '@example.com', password: pm.collectionVariables.get('demo_password') }) } },",
+          "  (err, res) => { if (!err && res.code === 200) pm.collectionVariables.set(name + '_token', res.json().access_token); else console.warn(name + ' login failed', err || res.code); });",
+          "['alice', 'bob', 'carol'].forEach((name) => { if (!pm.collectionVariables.get(name + '_token')) login(name); });"
         ]
       }
     }
@@ -19,7 +25,23 @@
   "variable": [
     {
       "key": "base_url",
-      "value": "http://localhost:8086"
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "demo_password",
+      "value": "password123"
+    },
+    {
+      "key": "alice_token",
+      "value": ""
+    },
+    {
+      "key": "bob_token",
+      "value": ""
+    },
+    {
+      "key": "carol_token",
+      "value": ""
     },
     {
       "key": "user_id",
@@ -36,7 +58,7 @@
   ],
   "item": [
     {
-      "name": "Health",
+      "name": "Health (gateway)",
       "event": [
         {
           "listen": "test",
@@ -44,7 +66,7 @@
             "type": "text/javascript",
             "exec": [
               "pm.test('status 200', () => pm.response.to.have.status(200));",
-              "pm.test('ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+              "pm.test('gateway ok', () => pm.expect(pm.response.json()).to.include({ status: 'ok', service: 'gateway' }));"
             ]
           }
         }
@@ -56,14 +78,15 @@
       }
     },
     {
-      "name": "Missing auth is 401",
+      "name": "Missing access token is 401 (gateway)",
       "event": [
         {
           "listen": "test",
           "script": {
             "type": "text/javascript",
             "exec": [
-              "pm.test('status 401', () => pm.response.to.have.status(401));"
+              "pm.test('status 401', () => pm.response.to.have.status(401));",
+              "pm.test('refused by the gateway', () => pm.expect(pm.response.json().code).to.eql('UNAUTHORIZED'));"
             ]
           }
         }
@@ -92,8 +115,8 @@
         "method": "PUT",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -134,8 +157,8 @@
         "method": "PUT",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{bob_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{bob_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -176,8 +199,8 @@
         "method": "PUT",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{carol_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{carol_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -220,8 +243,8 @@
         "method": "GET",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           }
         ],
         "url": "{{base_url}}/api/v1/map/users"
@@ -246,8 +269,8 @@
         "method": "GET",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{carol_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{carol_token}}"
           }
         ],
         "url": "{{base_url}}/api/v1/map/users"
@@ -280,8 +303,8 @@
         "method": "PUT",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -322,8 +345,8 @@
         "method": "PUT",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -373,8 +396,8 @@
         "method": "PUT",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -414,8 +437,8 @@
         "method": "DELETE",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{carol_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{carol_token}}"
           },
           {
             "key": "Idempotency-Key",
@@ -443,8 +466,8 @@
         "method": "GET",
         "header": [
           {
-            "key": "X-Mock-User-Id",
-            "value": "{{user_id}}"
+            "key": "Authorization",
+            "value": "Bearer {{alice_token}}"
           }
         ],
         "url": "{{base_url}}/api/v1/map/users"

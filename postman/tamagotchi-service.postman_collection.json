@@ -1,50 +1,171 @@
 {
   "info": {
-    "_postman_id": "46f99660-fbdc-44c8-b635-e62751e54339",
-    "name": "Tamagotchi Lab 1 regression suite",
+    "name": "Tamagotchi service (Lab 2, via Gateway)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "variable": [{"key": "base_url", "value": "http://localhost:8082"}],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "pet_ember",
+      "value": "00000000-0000-4000-8000-0000000000b1"
+    },
+    {
+      "key": "pet_ripple",
+      "value": "00000000-0000-4000-8000-0000000000b2"
+    }
+  ],
   "event": [
-    {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
-      "if (pm.environment.get('tamagotchi_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('tamagotchi_base_url'));",
-      "if (pm.info.requestName === 'Health') { ['user_id','foreign_id'].forEach(k => pm.collectionVariables.set(k, pm.variables.replaceIn('{{$guid}}'))); pm.collectionVariables.set('package_id', pm.environment.get('package_a') || '00000000-0000-4000-8000-0000000000a1'); }",
-      "pm.request.headers.upsert({key:'Content-Type',value:'application/json'});",
-      "if (pm.info.requestName !== 'Missing identity') pm.request.headers.upsert({key:'X-Mock-User-Id',value:pm.collectionVariables.get(pm.info.requestName === 'Foreign owner' ? 'foreign_id' : 'user_id')});",
-      "if (pm.info.requestName.startsWith('Internal') && pm.info.requestName !== 'Internal no service') pm.request.headers.upsert({key:'X-Service-Name',value:'battle'});"
-    ]}},
-    {"listen": "test", "script": {"type": "text/javascript", "exec": [
-      "const expected = {'Health':200,'Types':200,'Create':201,'Duplicate starter':409,'List':200,'Get':200,'Update':200,'Stale update':409,'Foreign owner':403,'Invalid ID':422,'Missing identity':401,'Trailing JSON':400,'Internal get':200,'Internal care':200,'Internal care incomplete':422,'Internal no service':401,'Delete':204,'Get deleted':404,'Recreate starter':409};",
-      "pm.test(pm.info.requestName + ' status', () => pm.response.to.have.status(expected[pm.info.requestName]));",
-      "pm.test('Request ID returned', () => pm.expect(pm.response.headers.get('X-Request-ID')).to.match(/^[a-f0-9-]{36}$/));",
-      "if (pm.response.code !== 204) { const b=pm.response.json(); if (pm.info.requestName === 'Create') { pm.collectionVariables.set('pet_id',b.pet_id); pm.test('Pet initialized from mocked definition',()=>{pm.expect(b.level).to.eql(1);pm.expect(b.version).to.eql(1);pm.expect(b.owner_id).to.eql(pm.collectionVariables.get('user_id'));}); }",
-      "if(pm.info.requestName === 'Get') pm.test('Read created record',()=>pm.expect(b.pet_id).to.eql(pm.collectionVariables.get('pet_id')));",
-      "if(pm.info.requestName === 'List') pm.test('List contains new record',()=>pm.expect(b.items.map(x=>x.pet_id)).to.include(pm.collectionVariables.get('pet_id')));",
-      "if(pm.info.requestName === 'Types') pm.test('Six types',()=>pm.expect(b.types.length).to.eql(6));",
-      "if(pm.info.requestName === 'Update') pm.test('Rename and version persisted',()=>{pm.expect(b.version).to.eql(2);pm.expect(b.name).to.eql('Blaze');});",
-      "if(pm.info.requestName === 'Internal care') pm.test('Care replaced',()=>pm.expect(b.version).to.eql(3));",
-      "if(pm.response.code>=400) pm.test('Structured error',()=>{pm.expect(b.request_id).to.eql(pm.response.headers.get('X-Request-ID'));pm.expect(b.code).to.be.a('string');pm.expect(b.details).to.be.an('array');}); }"
-    ]}}
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.environment.get('gateway_base_url')) pm.collectionVariables.set('base_url', pm.environment.get('gateway_base_url'));",
+          "function uuidv4() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) { var r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }); }",
+          "pm.request.headers.upsert({key: 'Content-Type', value: 'application/json'});",
+          "var publicRequests = ['Gateway health', 'Login Alice', 'Login Bob', 'Missing identity'];",
+          "if (publicRequests.indexOf(pm.info.requestName) === -1) {",
+          "    var m = pm.info.requestName.match(/^\\[(Alice|Bob)\\]/);",
+          "    var tokenKey = (m && m[1] === 'Bob') ? 'token_bob' : 'token_alice';",
+          "    pm.request.headers.upsert({key: 'Authorization', value: 'Bearer ' + pm.collectionVariables.get(tokenKey)});",
+          "}",
+          "var mutating = ['Create', 'Update', 'Decline', 'Accept', 'Cancel', 'Select', 'Rename'];",
+          "if (mutating.some(function (k) { return pm.info.requestName.indexOf(k) !== -1; })) {",
+          "    pm.request.headers.upsert({key: 'Idempotency-Key', value: uuidv4()});",
+          "}",
+          "if (pm.info.requestName === '[Alice] Select') {",
+          "    pm.request.body.update({mode: 'raw', raw: JSON.stringify({primary_pet_id: '00000000-0000-4000-8000-0000000000b1', secondary_pet_id: '00000000-0000-4000-8000-0000000000b2', expected_version: Number(pm.collectionVariables.get('sel_version'))}), options: {raw: {language: 'json'}}});",
+          "}",
+          "if (pm.info.requestName === '[Alice] Rename') {",
+          "    pm.request.body.update({mode: 'raw', raw: JSON.stringify({name: 'Ember', expected_version: Number(pm.collectionVariables.get('pet_version'))}), options: {raw: {language: 'json'}}});",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "var expected = {\"Gateway health\": 200, \"Login Alice\": 200, \"Login Bob\": 200, \"[Alice] Types\": 200, \"[Alice] List mine\": 200, \"[Alice] Get Ember\": 200, \"[Bob] Foreign pet redacted\": 200, \"[Alice] Get selection\": 200, \"[Alice] Select\": 200, \"[Alice] Rename\": 200, \"[Alice] Invalid ID\": 422, \"Missing identity\": 401};",
+          "pm.test(pm.info.requestName + ' status', function () { pm.response.to.have.status(expected[pm.info.requestName]); });",
+          "if (pm.response.code !== 204) { var b = pm.response.json();",
+          "pm.test('Request ID returned', function () { pm.expect(pm.response.headers.get('X-Request-ID')).to.match(/^[a-f0-9-]{36}$/); });",
+          "if (pm.response.code >= 400) { pm.test('Structured error', function () { pm.expect(b.request_id).to.eql(pm.response.headers.get('X-Request-ID')); pm.expect(b.code).to.be.a('string'); }); }",
+          "if (pm.info.requestName === 'Login Alice' && pm.response.code === 200) { pm.collectionVariables.set('token_alice', b.access_token); }",
+          "if (pm.info.requestName === 'Login Bob' && pm.response.code === 200) { pm.collectionVariables.set('token_bob', b.access_token); }",
+          "if (pm.info.requestName === '[Alice] List mine' && pm.response.code === 200) { pm.test('Seed pets present', function () { pm.expect(b.items.length).to.be.at.least(2); }); }",
+          "if (pm.info.requestName === '[Alice] Get Ember' && pm.response.code === 200) { pm.collectionVariables.set('pet_version', b.version); pm.test('Owner sees care stats', function () { pm.expect(b.care_stats).to.be.an('object'); }); }",
+          "if (pm.info.requestName === '[Bob] Foreign pet redacted' && pm.response.code === 200) { pm.test('Public view redacted', function () { pm.expect(b.care_stats).to.be.undefined; pm.expect(b).to.not.have.property('definition_version'); }); }",
+          "if (pm.info.requestName === '[Alice] Get selection' && pm.response.code === 200) { pm.collectionVariables.set('sel_version', b.version); }",
+          "}"
+        ]
+      }
+    }
   ],
   "item": [
-    {"name": "Health", "request": {"method": "GET", "url": "{{base_url}}/health"}},
-    {"name": "Types", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchi-types"}},
-    {"name": "Create", "request": {"method": "POST", "url": "{{base_url}}/api/v1/tamagotchis", "body": {"mode": "raw", "raw": "{\"package_id\":\"{{package_id}}\",\"name\":\"Ember\",\"type\":\"flame\"}"}}},
-    {"name": "Duplicate starter", "request": {"method": "POST", "url": "{{base_url}}/api/v1/tamagotchis", "body": {"mode": "raw", "raw": "{\"package_id\":\"{{package_id}}\",\"name\":\"Ember\",\"type\":\"flame\"}"}}},
-    {"name": "List", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchis"}},
-    {"name": "Get", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchis/{{pet_id}}"}},
-    {"name": "Update", "request": {"method": "PATCH", "url": "{{base_url}}/api/v1/tamagotchis/{{pet_id}}", "body": {"mode": "raw", "raw": "{\"name\":\"Blaze\",\"expected_version\":1}"}}},
-    {"name": "Stale update", "request": {"method": "PATCH", "url": "{{base_url}}/api/v1/tamagotchis/{{pet_id}}", "body": {"mode": "raw", "raw": "{\"name\":\"Blaze\",\"expected_version\":1}"}}},
-    {"name": "Foreign owner", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchis/{{pet_id}}"}},
-    {"name": "Invalid ID", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchis/not-a-uuid"}},
-    {"name": "Missing identity", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchis"}},
-    {"name": "Trailing JSON", "request": {"method": "POST", "url": "{{base_url}}/api/v1/tamagotchis", "body": {"mode": "raw", "raw": "{} {}"}}},
-    {"name": "Internal get", "request": {"method": "GET", "url": "{{base_url}}/internal/v1/tamagotchis/{{pet_id}}"}},
-    {"name": "Internal care", "request": {"method": "PUT", "url": "{{base_url}}/internal/v1/tamagotchis/{{pet_id}}/care-stats", "body": {"mode": "raw", "raw": "{\"care_stats\":{\"hunger\":5,\"happiness\":95},\"expected_version\":2}"}}},
-    {"name": "Internal care incomplete", "request": {"method": "PUT", "url": "{{base_url}}/internal/v1/tamagotchis/{{pet_id}}/care-stats", "body": {"mode": "raw", "raw": "{\"care_stats\":{\"hunger\":5},\"expected_version\":3}"}}},
-    {"name": "Internal no service", "request": {"method": "GET", "url": "{{base_url}}/internal/v1/tamagotchis/{{pet_id}}"}},
-    {"name": "Delete", "request": {"method": "DELETE", "url": "{{base_url}}/api/v1/tamagotchis/{{pet_id}}"}},
-    {"name": "Get deleted", "request": {"method": "GET", "url": "{{base_url}}/api/v1/tamagotchis/{{pet_id}}"}},
-    {"name": "Recreate starter", "request": {"method": "POST", "url": "{{base_url}}/api/v1/tamagotchis", "body": {"mode": "raw", "raw": "{\"package_id\":\"{{package_id}}\",\"name\":\"Replacement\",\"type\":\"flame\"}"}}}
+    {
+      "name": "Gateway health",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/health"
+      }
+    },
+    {
+      "name": "Login Alice",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/api/v1/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"alice@example.com\", \"password\": \"password123\"}"
+        }
+      }
+    },
+    {
+      "name": "Login Bob",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/api/v1/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"bob@example.com\", \"password\": \"password123\"}"
+        }
+      }
+    },
+    {
+      "name": "[Alice] Types",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/tamagotchi-types"
+      }
+    },
+    {
+      "name": "[Alice] List mine",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/tamagotchis"
+      }
+    },
+    {
+      "name": "[Alice] Get Ember",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/tamagotchis/{{pet_ember}}"
+      }
+    },
+    {
+      "name": "[Bob] Foreign pet redacted",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/tamagotchis/{{pet_ember}}"
+      }
+    },
+    {
+      "name": "[Alice] Get selection",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/tamagotchi-selections/me"
+      }
+    },
+    {
+      "name": "[Alice] Select",
+      "request": {
+        "method": "PUT",
+        "url": "{{base_url}}/api/v1/tamagotchi-selections/me",
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        }
+      }
+    },
+    {
+      "name": "[Alice] Rename",
+      "request": {
+        "method": "PATCH",
+        "url": "{{base_url}}/api/v1/tamagotchis/{{pet_ember}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        }
+      }
+    },
+    {
+      "name": "[Alice] Invalid ID",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/tamagotchis/not-a-uuid"
+      }
+    },
+    {
+      "name": "Missing identity",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/tamagotchis"
+      }
+    }
   ]
 }

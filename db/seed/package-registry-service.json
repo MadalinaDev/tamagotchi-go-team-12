@@ -1,0 +1,118 @@
+{
+  "_comment": "Reference copy of the package-registry-service self-seed (src/seed/seed-data.ts in the private repo, image 0.3.1). Applied by the service itself when SEED_ON_START=true: packages (with care definition v1) and registrations only while the packages table is empty, the raid definition only while the raid definition table is empty. Fixed IDs come from section 5 of docs/lab-1-conventions.md.",
+  "packages": [
+    {
+      "package_id": "00000000-0000-4000-8000-0000000000a1",
+      "name": "PetHub",
+      "app_version": "1.0.0",
+      "description": "Package A: keep your pet fed and happy.",
+      "status": "active",
+      "developer_id": "00000000-0000-4000-8000-000000000009",
+      "current_definition_version": 1,
+      "care_definition_v1": {
+        "stats": [
+          {
+            "key": "hunger",
+            "min": 0,
+            "max": 100,
+            "initial": 20,
+            "bonus_when": "gte",
+            "threshold": 80,
+            "combat_bonus": 0.05
+          },
+          {
+            "key": "happiness",
+            "min": 0,
+            "max": 100,
+            "initial": 80,
+            "bonus_when": "gte",
+            "threshold": 70,
+            "combat_bonus": 0.05
+          }
+        ],
+        "sprite_urls": [
+          "https://cdn.tamagotchi-go.example/packages/pethub/sprite.png"
+        ]
+      }
+    },
+    {
+      "package_id": "00000000-0000-4000-8000-0000000000a2",
+      "name": "MoodPets",
+      "app_version": "1.0.0",
+      "description": "Package B: keep your pet rested and in a good mood.",
+      "status": "active",
+      "developer_id": "00000000-0000-4000-8000-000000000009",
+      "current_definition_version": 1,
+      "care_definition_v1": {
+        "stats": [
+          {
+            "key": "energy",
+            "min": 0,
+            "max": 100,
+            "initial": 90,
+            "bonus_when": "gte",
+            "threshold": 75,
+            "combat_bonus": 0.05
+          },
+          {
+            "key": "mood",
+            "min": 0,
+            "max": 100,
+            "initial": 80,
+            "bonus_when": "gte",
+            "threshold": 60,
+            "combat_bonus": 0.05
+          }
+        ],
+        "sprite_urls": [
+          "https://cdn.tamagotchi-go.example/packages/moodpets/sprite.png"
+        ]
+      }
+    }
+  ],
+  "registrations": [
+    {
+      "package_id": "00000000-0000-4000-8000-0000000000a1",
+      "user_id": "00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "package_id": "00000000-0000-4000-8000-0000000000a2",
+      "user_id": "00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "package_id": "00000000-0000-4000-8000-0000000000a1",
+      "user_id": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "package_id": "00000000-0000-4000-8000-0000000000a2",
+      "user_id": "00000000-0000-4000-8000-000000000003"
+    }
+  ],
+  "raid_definitions": [
+    {
+      "definition_id": "00000000-0000-4000-8000-0000000000d1",
+      "version": 1,
+      "monster": {
+        "name": "Big Slime",
+        "description": "A wobbling blob that soaks up water and fears fire.",
+        "sprite_urls": [
+          "https://cdn.tamagotchi-go.example/monsters/big-slime.png"
+        ],
+        "max_hp": 300,
+        "attack": 12,
+        "defense": 2,
+        "weak_to": [
+          "flame"
+        ],
+        "resistant_to": [
+          "water"
+        ],
+        "special": "none"
+      },
+      "duration_seconds": 3600,
+      "participant_limit": 20,
+      "currency_reward": 50,
+      "xp_reward": 100
+    }
+  ]
+}

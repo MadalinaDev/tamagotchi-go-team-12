@@ -12,6 +12,9 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Communication contract](#communication-contract)
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
+- [Lab 2 — Running through the Gateway](#lab-2--running-through-the-gateway)
+- [Lab 2 — Vica's services behind the Gateway](#lab-2--vicas-services-behind-the-gateway)
+- [Lab 2 — User Management and Map behind the Gateway](#lab-2--user-management-and-map-behind-the-gateway)
 - [Lab 1 — Running the whole system](#lab-1--running-the-whole-system)
 - [Lab 1 — Running Sava's services](#lab-1--running-savas-services)
 - [Lab 1 — Running User Management and Map](#lab-1--running-user-management-and-map)
@@ -36,59 +39,93 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 
 ## Architecture
 
+Since Lab 2 the **API Gateway** is the single entry point. Clients reach the system only through it, and services also call each other through it. The one exception is Guild's chat WebSocket: the gateway negotiates it, and the client then connects to Guild directly.
+
 ```mermaid
 flowchart LR
-    C[Package clients]
-    U["User Management<br/>TypeScript / NestJS"]
-    M["Map<br/>TypeScript / NestJS"]
-    P["Package Registry<br/>TypeScript / NestJS"]
-    R["Monster Raid<br/>TypeScript / NestJS"]
-    B["Battle<br/>Go"]
-    T["Tamagotchi<br/>Go"]
-    G["Guild<br/>Go"]
-    N["Notification<br/>Go"]
-    Q[(RabbitMQ)]
-    F[Firebase Cloud Messaging]
-    C -->|REST / JSON| U & M & P & R & B & T & G & N
-    C <-->|WebSocket chat| G
-    M -->|relationships| U
-    U -->|package registration / raid reward rules| P
-    P -->|developer identity| U
-    P -->|target guild| G
-    G -->|identity / relationships| U
-    G -->|package registration| P
-    T -->|stat definitions / registration| P
-    B -->|pet reservation / settlement| T
-    B -->|wallet settlement| U
-    B -->|stat interpretation| P
-    R -->|guild membership| G
-    R -->|pet reservation / XP| T
-    R -->|wallet rewards| U
-    R -->|raid definition| P
-    U & M & G & B & T & R & P -->|domain events| Q
-    Q -->|notification triggers| N
-    Q -->|scheduled raid requests| R
-    F -->|push| C
-    N --> F
-    N -->|raid-start recipients| G
+    C["Clients<br/>package apps, Postman"]
+    GW["API Gateway<br/>Python · :8080<br/>JWT check via JWKS<br/>routing · 5 s timeout<br/>50 concurrent tasks"]
+    WS["Guild chat WebSocket<br/>:8083 · Guild's only<br/>public port"]
+
+    subgraph SVC["Services · Docker network only (expose:)"]
+        GOS["Go<br/>Battle :8081<br/>Tamagotchi :8082<br/>Guild :8083<br/>Notification :8084"]
+        NEST["NestJS + Prisma<br/>User Management :8085<br/>Map :8086<br/>Monster Raid :8087<br/>Package Registry :8088"]
+    end
+
+    DB[("PostgreSQL + PostGIS<br/>one database<br/>per service")]
+    F["Firebase Cloud Messaging<br/>push to client devices"]
+    Q[("RabbitMQ<br/>later lab")]
+
+    C -->|"① REST + Bearer JWT<br/>only published REST port"| GW
+    GW <-->|"② user calls: X-Auth-User-Id,<br/>X-Auth-Roles, X-Gateway-Secret<br/>(JWT not forwarded)<br/>③ service-to-service:<br/>/internal/v1/* + service token,<br/>always through the gateway"| SVC
+    C <==>|"④ chat socket, URL<br/>negotiated by the gateway"| WS
+    SVC --- DB
+    SVC -->|"⑤ Notification push"| F
+    SVC -.->|"domain events<br/>today /internal/v1/dev/*<br/>through the gateway"| Q
 ```
 
-Every service has its **own PostgreSQL database and credentials**. Those eight databases are omitted above for readability. A shared PostgreSQL server is acceptable for local development; tables and credentials remain isolated. Client routing can initially use configured service URLs; a gateway can be added later without changing the contracts. Public and internal routes must be separated by network exposure and authorization.
+**Request flow and WebSocket negotiation:**
 
-| Caller / producer | Receiver | Purpose |
-| --- | --- | --- |
-| Clients | All public service APIs | REST commands and queries; user JWT |
-| Clients | Guild | Authenticated WebSocket chat and REST history |
-| Map | User Management | Filter friends/enemies and unrelated proximity candidates |
-| User Management | Package Registry | Verify local-wallet registration and pinned raid reward rules |
-| Package Registry | User Management, Guild | Validate developer identity and scheduled raid target guild |
-| Notification | Guild | Resolve and persist the recipient set for raid-start notifications |
-| Guild | User Management, Package Registry | Verify invitee identity, accepted friendship and shared package |
-| Tamagotchi | Package Registry | Verify registration; retrieve immutable care rules and sprite configuration |
-| Battle | Tamagotchi, Package Registry, User Management | Reserve pets, snapshot stats/rules, settle pet XP/transfer and global currency |
-| Monster Raid | Guild, Tamagotchi, Package Registry, User Management | Check membership, reserve primary pets, read rules, settle rewards |
-| Package Registry | RabbitMQ → Monster Raid | Activate/cancel a scheduled raid using a versioned definition |
-| User Management, Map, Guild, Battle, Tamagotchi, Monster Raid | RabbitMQ → Notification | Persist and deliver targeted user notifications |
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant GW as Gateway :8080
+    participant UM as User Management
+    participant G as Guild :8083
+    participant N as Notification
+
+    C->>GW: POST /api/v1/auth/login (anonymous route)
+    GW->>UM: forward
+    UM-->>GW: access_token (RS256 JWT)
+    GW-->>C: access_token
+    C->>GW: POST /api/v1/guilds/{id}/invites + Bearer JWT
+    GW->>GW: validate JWT (JWKS, iss, aud, exp), drop Authorization
+    GW->>G: X-Auth-User-Id, X-Auth-Roles, X-Gateway-Secret
+    G->>GW: GET /internal/v1/users/{id}/relationships + Bearer guild token
+    GW->>UM: X-Service-Name: guild
+    UM-->>GW: friend_ids
+    GW-->>G: friend_ids
+    G->>GW: POST /internal/v1/dev/events (GuildInvited) + guild token
+    GW->>N: X-Service-Name: guild
+    N-->>GW: 200 (inbox entry for the invitee)
+    GW-->>G: 200
+    G-->>GW: 201 GuildInvite
+    GW-->>C: 201 GuildInvite
+    C->>GW: POST /api/v1/guilds/{id}/chat-tickets + JWT
+    GW->>G: X-Auth-User-Id, X-Gateway-Secret
+    G-->>GW: 201 {ticket} (single-use, 30 s)
+    GW-->>C: 201 {ticket}
+    C->>GW: GET /api/v1/guilds/{id}/ws?ticket=...
+    GW-->>C: 200 {ws_url: ws://localhost:8083/...} (not proxied)
+    C->>G: WebSocket upgrade (direct, ticket checked)
+    G-->>C: 101, then chat.ack / chat.message frames
+```
+
+- **Databases:** every service has its **own PostgreSQL database and credentials** on one local Postgres server (PostGIS for Map). Tables and credentials stay isolated; services never read another service's database.
+- **Not drawn as separate arrows:** the gateway reads User Management's JWKS to verify tokens, and Monster Raid's live HP (SSE) is streamed through the gateway like any other response.
+- **Ports:** only the gateway's 8080 is published for REST, plus Guild's 8083 for the direct WebSocket. All other service ports are `expose:` only.
+- **Header trust:**
+  - The gateway strips every client-supplied `Authorization`, `X-Auth-*`, `X-Service-*` and `X-Gateway-*` header, and injects its own plus `X-Gateway-Secret`.
+  - Services trust identity headers only next to that secret, so a forged `X-Auth-User-Id` sent straight to Guild's public port is rejected.
+- **Task controls:** the gateway and every service bound each task to 5 s (`504 TASK_TIMEOUT`) and 50 concurrent tasks (`503 TOO_MANY_CONCURRENT_TASKS`, `Retry-After`).
+
+| Caller / producer | Receiver | Purpose | How (Lab 2) |
+| --- | --- | --- | --- |
+| Clients | All public service APIs | REST commands and queries; user JWT | Through the gateway |
+| Clients | Guild | WebSocket chat; REST history and tickets | Ticket and negotiation through the gateway, socket direct |
+| Clients | Monster Raid | Live raid HP (SSE) | Streamed through the gateway |
+| Map | User Management | Filter friends/enemies and unrelated proximity candidates | Through the gateway |
+| User Management | Package Registry | Verify local-wallet registration and pinned raid reward rules | Through the gateway |
+| Package Registry | User Management, Guild | Validate developer identity and scheduled raid target guild | Through the gateway |
+| Notification | Guild | Resolve the recipient set for raid-start notifications | Through the gateway |
+| Guild | User Management, Package Registry | Verify invitee identity, accepted friendship and shared package | Through the gateway |
+| Guild | Notification | `GuildInvited` | Through the gateway to `/internal/v1/dev/events` (stands in for RabbitMQ) |
+| Tamagotchi | Package Registry | Verify registration; retrieve immutable care rules and sprite configuration | Through the gateway |
+| Battle | Tamagotchi, Package Registry, User Management | Reserve pets, snapshot stats/rules, settle pet XP/transfer and global currency | Through the gateway |
+| Monster Raid | Guild, Tamagotchi, Package Registry, User Management | Check membership, reserve primary pets, read rules, settle rewards | Through the gateway |
+| Package Registry | RabbitMQ → Monster Raid | Activate/cancel a scheduled raid using a versioned definition | Later lab; today `/internal/v1/dev/raid-events` |
+| User Management, Map, Guild, Battle, Tamagotchi, Monster Raid | RabbitMQ → Notification | Persist and deliver targeted user notifications | Later lab; today `/internal/v1/dev/events` |
 
 ## Technologies and trade-offs
 
@@ -98,6 +135,7 @@ Every service has its **own PostgreSQL database and credentials**. Those eight d
 | Guild, Notification | Go | PostgreSQL | REST/JSON, RabbitMQ; Guild WebSockets; Notification Firebase SDK |
 | User Management, Map | TypeScript / NestJS | PostgreSQL; PostGIS extension for Map; Prisma ORM | REST/JSON, RabbitMQ |
 | Monster Raid, Package Registry | TypeScript / NestJS | PostgreSQL; Prisma ORM | REST/JSON, RabbitMQ |
+| API Gateway | Python | none (stateless; JWKS cached in memory) | REST/JSON in and out, JWT (RS256 via JWKS), SSE pass-through, WebSocket negotiation |
 
 - **TypeScript / NestJS:** typed DTOs, validation and modules fit accounts, maps, raids and package configuration. Prisma simplifies PostgreSQL access across the four NestJS services. It needs more initial structure than a minimal HTTP library; runtime validation is still necessary because TypeScript types disappear at runtime.
 - **Go:** single static binary, low memory/startup time and goroutines fit turn-based battle validation, concurrent pet reservation/settlement, guild chat fan-out and notification delivery. Explicit error handling and `database/sql` keep settlement logic auditable. Trade-off is more boilerplate than NestJS modules and a less batteries-included WebSocket/Firebase ecosystem, handled here with explicit reconnect/history and delivery-retry logic. Using exactly these two languages (Go + TypeScript, four services each) satisfies the course requirement against tooling overhead.
@@ -356,6 +394,7 @@ RaidAttack = {attack_id: Id, raid_id: Id, user_id: Id, damage: Int, remaining_hp
 | --- | --- | --- | --- |
 | `GET /api/v1/raids` | User | Pagination; `guild_id: Id` | `200 Page<Raid>`; must be current guild member |
 | `GET /api/v1/raids/{raid_id}` | Current guild member or recorded participant | None | `200 Raid` |
+| `GET /api/v1/raids/{raid_id}/events` | Current guild member or recorded participant | None | `200 text/event-stream`: `raid` snapshot and state changes, `attack` with `remaining_hp`, `ping` every 15 s; ends when the raid is terminal (added in Lab 2, see [Sabina's Lab 2 notes](docs/lab-2-contract-sabina.md)) |
 | `POST /api/v1/raids/{raid_id}/participants` | Current guild member | `{primary_pet_id: Id}` | `201 RaidParticipant`; reserve selected primary and verify capacity |
 | `GET /api/v1/raids/{raid_id}/participants` | Current guild member or participant | Pagination | `200 Page<RaidParticipant>` |
 | `POST /api/v1/raids/{raid_id}/attacks` | Participant who remains a guild member | `{}` | `201 RaidAttack`; max one accepted attack per second per user, otherwise `429` |
@@ -532,6 +571,106 @@ This section defines the team policy. **Documented rules are not proof that GitH
 
 Private repos admit the professor(s), not teammates, as required by the lab. Peer review of shared contracts happens in this public repo; the private owner applies the agreed contract in their own README. Do not require an unavailable teammate approval in private repo settings.
 
+## Lab 2 — Running through the Gateway
+
+Lab 2 puts the Python Gateway in front of every REST call: port **8080** is the
+only REST entry point. The Gateway validates `Authorization: Bearer <JWT>`
+(User Management RS256 via JWKS), strips it, and forwards trusted identity
+headers plus `X-Gateway-Secret`. Migrated services (`Battle`, `Tamagotchi`
+`0.3.0` with `AUTH_MODE=gateway`; `Monster Raid`, `Package Registry` `0.3.1`;
+`Guild`, `Notification`, `User Management`, `Map` `0.3.0`)
+trust only those headers, call each other only through the Gateway, and have
+a 5 s task timeout and a 50-task concurrency limit; their REST ports are
+internal-only.
+The full rules are in [docs/lab-2-conventions.md](docs/lab-2-conventions.md).
+
+Sava's part is done and verified: Gateway ([MadalinaDev/gateway-service](https://github.com/MadalinaDev/gateway-service),
+Sava's Battle/Tamagotchi routes), Battle and Tamagotchi `0.3.0` images
+(`ekkusuu/tamagotchi-battle-service:0.3.0`,
+`ekkusuu/tamagotchi-tamagotchi-service:0.3.0`, both + `latest`), full combat
+engine and pet reservation/settlement, CI publishing on merge to `main`.
+
+Sabina's part is done and verified: the Gateway's Monster Raid and Package
+Registry routes and its task-limit middleware (MadalinaDev/gateway-service#3,
+connection-pool fix in #5), Monster Raid and Package Registry `0.3.1`
+(`sabinapopescu/tamagotchi-monster-raid-service:0.3.1`,
+`sabinapopescu/tamagotchi-package-registry-service:0.3.1`, both + `latest`),
+live raid HP over SSE through the Gateway, the Package Registry seed, and CI
+publishing on merge to `main`. Both services call Guild, User Management and
+each other through the Gateway; the remaining mocks are listed in
+[docs/lab-2-contract-sabina.md](docs/lab-2-contract-sabina.md).
+
+Run and verify (`.env` needs the Lab 2 tokens/secrets from `.env.example`):
+
+```sh
+docker compose up -d --wait
+curl http://localhost:8080/health
+npx newman run postman/battle-service.postman_collection.json
+npx newman run postman/tamagotchi-service.postman_collection.json
+npx newman run postman/monster-raid-service.postman_collection.json --env-var "service_token=$RAID_SERVICE_TOKEN"
+npx newman run postman/package-registry-service.postman_collection.json --env-var "service_token=$REGISTRY_SERVICE_TOKEN"
+```
+
+Both collections log in as the seeded users (`alice@example.com` /
+`password123`, seeded by User Management) and exercise CRUD plus the
+challenge/decline and selection flows through the Gateway. Full battle
+accept → settlement relies on the convention packages and registrations that
+Package Registry `0.3.1` seeds (`SEED_ON_START=true`); Guild chat tickets
+are served by Guild `0.3.0`.
+
+## Lab 2 — Vica's services behind the Gateway
+
+Guild and Notification `0.3.0` follow the [Lab 2 conventions](docs/lab-2-conventions.md). The details and what was verified are in the [Lab 2 contract notes](docs/lab-2-contract-vica.md).
+
+**Images (public, `0.3.0` + `latest`, linux/amd64 and linux/arm64), published by each repository's CI on merge to `main`:**
+
+- [`nikvnln/tamagotchi-guild-service:0.3.0`](https://hub.docker.com/r/nikvnln/tamagotchi-guild-service)
+- [`nikvnln/tamagotchi-notification-service:0.3.0`](https://hub.docker.com/r/nikvnln/tamagotchi-notification-service)
+
+**What changed:**
+
+- **Gateway headers.** Both services accept REST only from the gateway: `X-Auth-User-Id` / `X-Auth-Roles` or `X-Service-Name`, together with `X-Gateway-Secret`. `X-Mock-User-Id` is gone.
+- **Ports.** Notification is `expose:` only. Guild publishes 8083 solely for the direct chat WebSocket.
+- **Calls through the gateway.** Outgoing calls use the service token and are all real in the compose file (`USE_MOCKS=false`): Guild → User Management, Guild → Package Registry, Guild → Notification (`GuildInvited`) and Notification → Guild.
+- **WebSocket chat (grade 7).**
+  1. `POST /api/v1/guilds/{id}/chat-tickets` through the gateway gives a single-use 30 s ticket.
+  2. `GET /api/v1/guilds/{id}/ws?ticket=...` at the gateway returns `{"ws_url": "ws://localhost:8083/..."}`.
+  3. The client connects to Guild directly and exchanges `chat.send` / `chat.ack` / `chat.message` / `chat.error`.
+- **Task controls (grade 8).** 5 s deadline (`504 TASK_TIMEOUT`) and 50 concurrent tasks (`503 TOO_MANY_CONCURRENT_TASKS`, `Retry-After: 1`) in both services.
+
+**Verify** (after `docker compose up -d --wait`). Set `service_token` to any `*_SERVICE_TOKEN` value from `.env`:
+
+```sh
+npx newman run postman/guild-service.postman_collection.json -e postman/local.postman_environment.json --env-var service_token=<token>
+npx newman run postman/notification-service.postman_collection.json -e postman/local.postman_environment.json --env-var service_token=<token>
+```
+
+## Lab 2 — User Management and Map behind the Gateway
+
+Mădălina's User Management and Map `0.3.0` follow the [Lab 2 conventions](docs/lab-2-conventions.md). The details and what was verified are in the [Lab 2 contract notes](docs/lab-2-contract-madalina.md).
+
+**Images (public, `0.3.0` + `latest`), published by each repository's CI on merge to `main`:**
+
+- [`madalina060504/tamagotchi-user-management-service:0.3.0`](https://hub.docker.com/r/madalina060504/tamagotchi-user-management-service)
+- [`madalina060504/tamagotchi-map-service:0.3.0`](https://hub.docker.com/r/madalina060504/tamagotchi-map-service)
+
+**What changed:**
+
+- **Gateway headers.** Both services accept REST only from the gateway: `X-Auth-User-Id` (or `X-Service-Name` on User Management's internal routes), together with `X-Gateway-Secret`. `X-Mock-User-Id` is gone. Only `/health` and User Management's JWKS, which the gateway fetches directly, skip the secret.
+- **Ports.** Both are `expose:` only.
+- **Calls through the gateway.** Outgoing calls use the service token and are real in the compose file (`USE_MOCKS=false`): Map → User Management and User Management → Package Registry.
+- **Roles in the access token (grade 10).** Tokens carry `roles` (`["admin"]` for the global admin, `[]` otherwise), which the gateway forwards as `X-Auth-Roles`. The gateway's interim `GATEWAY_ADMIN_USER_IDS` bridge is no longer needed for the seeded admin.
+- **Live nearby users over SSE (grade 7).** `GET /api/v1/map/stream` goes through the gateway and pushes the caller's visible users whenever they change (`users`, `error` and `ping` events).
+- **Task controls (grade 8).** 5 s deadline (`504 TASK_TIMEOUT`) and 50 concurrent tasks (`503 TOO_MANY_CONCURRENT_TASKS`, `Retry-After: 1`) in both services. The SSE stream is exempt.
+
+**Verify** (after `docker compose up -d --wait`). The service tokens are the `MAP_SERVICE_TOKEN` and `BATTLE_SERVICE_TOKEN` values from `.env`:
+
+```sh
+npx newman run postman/user-management-service.postman_collection.json -e postman/local.postman_environment.json   --env-var map_service_token=<token> --env-var battle_service_token=<token>
+npx newman run postman/map-service.postman_collection.json -e postman/local.postman_environment.json
+curl -N http://localhost:8080/api/v1/map/stream -H "Authorization: Bearer <access token from POST /api/v1/auth/login>"
+```
+
 ## Lab 1 — Running the whole system
 
 All eight services are published on Docker Hub and started together by one Compose file. This section is the entry point for Lab 1. The owner sections below give per-service details.
@@ -588,8 +727,8 @@ done
 
 | Collection | Requests |
 | --- | --- |
-| battle-service | 13 |
-| tamagotchi-service | 19 |
+| battle-service | 12 (Lab 2, via Gateway) |
+| tamagotchi-service | 12 (Lab 2, via Gateway) |
 | guild-service | 31 |
 | notification-service | 12 |
 | user-management-service | 28 |
@@ -818,12 +957,13 @@ The common repository stores shared documentation, collaboration files and Git s
 | --- | --- | --- |
 | `services/battle-service` | [Ekkusuu/battle-service](https://github.com/Ekkusuu/battle-service) | Lab 1 CRUD implementation published; linked as submodule |
 | `services/tamagotchi-service` | [Ekkusuu/tamagotchi-service](https://github.com/Ekkusuu/tamagotchi-service) | Lab 1 CRUD implementation published; linked as submodule |
-| `services/guild-service` | [vikanicologlo/guild-service](https://github.com/vikanicologlo/guild-service) | Lab 1 implementation published (`v0.1.1`, image `0.1.1`); linked as submodule |
-| `services/notification-service` | [vikanicologlo/notification-service](https://github.com/vikanicologlo/notification-service) | Lab 1 implementation published (`v0.1.1`, image `0.1.1`); linked as submodule |
+| `services/guild-service` | [vikanicologlo/guild-service](https://github.com/vikanicologlo/guild-service) | Lab 2 implementation (`v0.3.0`, image `0.3.0`): gateway integration, WebSocket chat, task controls, CI; linked as submodule |
+| `services/notification-service` | [vikanicologlo/notification-service](https://github.com/vikanicologlo/notification-service) | Lab 2 implementation (`v0.3.0`, image `0.3.0`): gateway integration, task controls, CI; linked as submodule |
 | `services/user-management-service` | [MadalinaDev/user-management-service](https://github.com/MadalinaDev/user-management-service) | Lab 1 implementation published (`v0.1.1`); linked as submodule |
 | `services/map-service` | [MadalinaDev/map-service](https://github.com/MadalinaDev/map-service) | Lab 1 implementation published (`v0.1.1`); linked as submodule |
 | `services/monster-raid-service` | [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service) | Lab 1 implementation published (image `0.1.2`); linked as submodule |
 | `services/package-registry-service` | [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service) | Lab 1 implementation published (image `0.1.0`); linked as submodule |
+| `services/gateway-service` | [MadalinaDev/gateway-service](https://github.com/MadalinaDev/gateway-service) | Lab 2: repository set up (README, PR template, PR policy, `main`/`dev`); professor and all teammates invited; linked as submodule |
 
 Do not add fake submodules or copy private source into public folders. A real submodule needs a remote URL and an existing commit. To add one from the common repo after the service owner has pushed its README:
 

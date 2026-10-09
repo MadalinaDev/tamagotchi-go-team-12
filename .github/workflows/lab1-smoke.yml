@@ -1,7 +1,7 @@
 name: Lab 1 smoke
 on:
   pull_request:
-    paths: ['docker-compose.yml', 'db/**', 'postman/**', '.env.example', '.github/workflows/lab1-smoke.yml']
+    paths: ['docker-compose.yml', 'db/**', 'postman/**', '.env.example', '.github/workflows/lab1-smoke.yml', '.github/smoke/**']
   workflow_dispatch:
 permissions:
   contents: read
@@ -18,6 +18,15 @@ jobs:
       MAP_DB_PASSWORD: ci_map_${{ github.run_id }}
       RAID_DB_PASSWORD: ci_raid_${{ github.run_id }}
       REGISTRY_DB_PASSWORD: ci_registry_${{ github.run_id }}
+      GATEWAY_SECRET: ci_gateway_secret_${{ github.run_id }}
+      BATTLE_SERVICE_TOKEN: ci_tok_battle_${{ github.run_id }}
+      TAMAGOTCHI_SERVICE_TOKEN: ci_tok_tama_${{ github.run_id }}
+      GUILD_SERVICE_TOKEN: ci_tok_guild_${{ github.run_id }}
+      NOTIFICATION_SERVICE_TOKEN: ci_tok_notif_${{ github.run_id }}
+      USER_MANAGEMENT_SERVICE_TOKEN: ci_tok_users_${{ github.run_id }}
+      MAP_SERVICE_TOKEN: ci_tok_map_${{ github.run_id }}
+      RAID_SERVICE_TOKEN: ci_tok_raid_${{ github.run_id }}
+      REGISTRY_SERVICE_TOKEN: ci_tok_registry_${{ github.run_id }}
       COMPOSE_PROJECT_NAME: pad-lab1-ci
     steps:
       - uses: actions/checkout@v4
@@ -25,13 +34,30 @@ jobs:
         with:
           node-version: '22'
       - run: docker compose pull && docker compose up -d --wait
+      - run: curl --fail http://localhost:8080/health
       - run: npx --yes newman@6.2.1 run postman/battle-service.postman_collection.json --bail
       - run: npx --yes newman@6.2.1 run postman/tamagotchi-service.postman_collection.json --bail
-      - run: npx --yes newman@6.2.1 run postman/guild-service.postman_collection.json --bail
-      - run: npx --yes newman@6.2.1 run postman/notification-service.postman_collection.json --bail
-      - run: npx --yes newman@6.2.1 run postman/user-management-service.postman_collection.json --bail
+      - run: npx --yes newman@6.2.1 run postman/guild-service.postman_collection.json -e postman/local.postman_environment.json --bail --env-var "service_token=$GUILD_SERVICE_TOKEN"
+      - run: npx --yes newman@6.2.1 run postman/notification-service.postman_collection.json -e postman/local.postman_environment.json --bail --env-var "service_token=$NOTIFICATION_SERVICE_TOKEN"
+      # Internal requests use the same service tokens the gateway is started with.
+      - run: npx --yes newman@6.2.1 run postman/user-management-service.postman_collection.json --bail --env-var "map_service_token=$MAP_SERVICE_TOKEN" --env-var "battle_service_token=$BATTLE_SERVICE_TOKEN"
       - run: npx --yes newman@6.2.1 run postman/map-service.postman_collection.json --bail
-      - run: npx --yes newman@6.2.1 run postman/monster-raid-service.postman_collection.json --bail
-      - run: npx --yes newman@6.2.1 run postman/package-registry-service.postman_collection.json --bail
+      # Since Lab 2, Monster Raid and Package Registry are reachable only through
+      # the gateway (expose: only), and their collections log in through it. Until
+      # gateway-service is in docker-compose.yml, check both services from inside
+      # the compose network instead; the collections run as soon as it is added.
+      - name: Monster Raid and Package Registry
+        run: |
+          if curl -s -m 3 -o /dev/null http://localhost:8087 || curl -s -m 3 -o /dev/null http://localhost:8088; then
+            echo "::error::Monster Raid / Package Registry must not be published on the host (Lab 2: expose only)"
+            exit 1
+          fi
+          if docker compose config --services | grep -qx gateway-service; then
+            npx --yes newman@6.2.1 run postman/monster-raid-service.postman_collection.json --bail --env-var "service_token=$RAID_SERVICE_TOKEN"
+            npx --yes newman@6.2.1 run postman/package-registry-service.postman_collection.json --bail --env-var "service_token=$REGISTRY_SERVICE_TOKEN"
+          else
+            echo "::notice::gateway-service is not in docker-compose.yml yet; checking Monster Raid and Package Registry inside the compose network instead of running their gateway collections."
+            docker compose exec -T monster-raid-service node - < .github/smoke/sabina-services-probe.js
+          fi
       - if: always()
         run: docker compose logs && docker compose down -v
