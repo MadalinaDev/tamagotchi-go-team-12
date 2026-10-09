@@ -233,7 +233,7 @@ services:
 
   monster-raid-service:
     <<: *service
-    image: sabinapopescu/tamagotchi-monster-raid-service:0.3.0
+    image: sabinapopescu/tamagotchi-monster-raid-service:0.3.1
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     environment:
@@ -245,17 +245,21 @@ services:
       # Lab 2 task limits: 504 TASK_TIMEOUT, 503 TOO_MANY_CONCURRENT_TASKS.
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
-      # Calls to other services go only through the gateway. Mocked until
-      # gateway-service and the teammates' internal routes run in this file.
+      # Calls to other services go only through the gateway, with SERVICE_TOKEN
+      # (mapped to this service's X-Service-Name). Still mocked: USE_MOCKS=false
+      # once the teammates' internal routes are verified in this stack.
       GATEWAY_URL: http://gateway-service:8080
+      SERVICE_TOKEN: ${RAID_SERVICE_TOKEN}
       USE_MOCKS: "true"
+      # Same secret as the gateway: requests without X-Gateway-Secret get 401.
+      GATEWAY_SECRET: ${GATEWAY_SECRET}
     # Lab 2: no host port; reachable only through gateway-service.
     expose:
       - "8087"
 
   package-registry-service:
     <<: *service
-    image: sabinapopescu/tamagotchi-package-registry-service:0.3.0
+    image: sabinapopescu/tamagotchi-package-registry-service:0.3.1
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     environment:
@@ -267,10 +271,16 @@ services:
       # Lab 2 task limits: 504 TASK_TIMEOUT, 503 TOO_MANY_CONCURRENT_TASKS.
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
-      # Calls to other services go only through the gateway. Mocked until
-      # gateway-service and the teammates' internal routes run in this file.
+      # Calls to other services go only through the gateway, with SERVICE_TOKEN
+      # (mapped to this service's X-Service-Name). Still mocked: USE_MOCKS=false
+      # once the teammates' internal routes are verified in this stack.
       GATEWAY_URL: http://gateway-service:8080
+      SERVICE_TOKEN: ${REGISTRY_SERVICE_TOKEN}
       USE_MOCKS: "true"
+      # Same secret as the gateway: requests without X-Gateway-Secret get 401.
+      GATEWAY_SECRET: ${GATEWAY_SECRET}
+      # Fixed-ID seed (PetHub, MoodPets, registrations, Big Slime) when empty.
+      SEED_ON_START: "true"
     # Lab 2: no host port; reachable only through gateway-service.
     expose:
       - "8088"

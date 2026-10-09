@@ -52,7 +52,17 @@ async function main() {
     check(`${service}: X-Auth-User-Id -> 200`, r.status === 200, r.status);
   }
 
-  let r = await fetch(`${REGISTRY}/api/v1/raid-definitions`, { headers: { 'x-auth-user-id': ALICE } });
+  // Seed (SEED_ON_START=true): the convention packages and registrations.
+  let r = await fetch(`${REGISTRY}/api/v1/packages`, { headers: { 'x-auth-user-id': ALICE } });
+  const names = ((await r.json()).items ?? []).map((p) => p.name).sort();
+  check('Package Registry: seeded PetHub and MoodPets', names.join() === 'MoodPets,PetHub', names.join());
+  r = await fetch(`${REGISTRY}/internal/v1/users/${ALICE}/package-registrations`, {
+    headers: { 'x-service-name': 'guild' },
+  });
+  const registrations = (await r.json()).registrations ?? [];
+  check("Package Registry: Alice's two seeded registrations", registrations.length === 2, registrations.length);
+
+  r = await fetch(`${REGISTRY}/api/v1/raid-definitions`, { headers: { 'x-auth-user-id': ALICE } });
   check('Package Registry: admin route without X-Auth-Roles: admin -> 403', r.status === 403, r.status);
   r = await fetch(`${REGISTRY}/internal/v1/packages/${FOUNDERS}`);
   check('Package Registry: internal route without X-Service-Name -> 401', r.status === 401, r.status);
