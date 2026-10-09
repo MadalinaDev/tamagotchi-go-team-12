@@ -52,8 +52,8 @@ jobs:
             exit 1
           fi
           if docker compose config --services | grep -qx gateway-service; then
-            npx --yes newman@6.2.1 run postman/monster-raid-service.postman_collection.json --bail
-            npx --yes newman@6.2.1 run postman/package-registry-service.postman_collection.json --bail
+            npx --yes newman@6.2.1 run postman/monster-raid-service.postman_collection.json --bail --env-var "service_token=$RAID_SERVICE_TOKEN"
+            npx --yes newman@6.2.1 run postman/package-registry-service.postman_collection.json --bail --env-var "service_token=$REGISTRY_SERVICE_TOKEN"
           else
             echo "::notice::gateway-service is not in docker-compose.yml yet; checking Monster Raid and Package Registry inside the compose network instead of running their gateway collections."
             docker compose exec -T monster-raid-service node - < .github/smoke/sabina-services-probe.js
