@@ -27,6 +27,7 @@ jobs:
       MAP_SERVICE_TOKEN: ci_tok_map_${{ github.run_id }}
       RAID_SERVICE_TOKEN: ci_tok_raid_${{ github.run_id }}
       REGISTRY_SERVICE_TOKEN: ci_tok_registry_${{ github.run_id }}
+      DISCOVERY_SECRET: ci_discovery_secret_${{ github.run_id }}
       COMPOSE_PROJECT_NAME: pad-lab1-ci
     steps:
       - uses: actions/checkout@v4
