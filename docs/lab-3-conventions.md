@@ -338,8 +338,8 @@ their rows in their Lab 3 PR:
 
 | Service | Today | Lab 3 change | Owner |
 | --- | --- | --- | --- |
-| Monster Raid | SSE updates fanned out in memory ([lab-2-contract-sabina.md](lab-2-contract-sabina.md)) | `LISTEN`/`NOTIFY` between replicas; the expiry already claims the raid under a row lock | Sabina |
-| Package Registry | Seed on startup | Seed under an advisory lock | Sabina |
+| Monster Raid | SSE updates fanned out in memory ([lab-2-contract-sabina.md](lab-2-contract-sabina.md)) | `LISTEN`/`NOTIFY` between replicas (done, Monster Raid 0.4.0); the expiry already claims the raid under a row lock | Sabina |
+| Package Registry | Nothing instance-local: the seed already runs under table locks, versions come from row-locked increments, schedule transitions are one conditional `UPDATE` | None needed (checked with two replicas seeding together, Package Registry 0.4.0) | Sabina |
 | Guild | Chat tickets in memory, sockets fanned out in memory, one public WebSocket port `8083` ([lab-2-contract-vica.md](lab-2-contract-vica.md)) | Tickets in the database and `LISTEN`/`NOTIFY` fan-out; then either the Gateway proxies the WebSocket to any replica (`8083` is no longer published), or Guild stays at one replica as a documented exception | Vica |
 | Notification | Delivery attempts and retries | Claim retries with `SKIP LOCKED`; keep the deduplication key unique in the database | Vica |
 | User Management | JWT signing key | One key pair for all replicas (rule 4) | Mădălina |
