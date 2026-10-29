@@ -12,6 +12,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Communication contract](#communication-contract)
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
+- [Lab 3 — Scaling up](#lab-3--scaling-up)
 - [Lab 2 — Running through the Gateway](#lab-2--running-through-the-gateway)
 - [Lab 3 — Vica's services with replicas](#lab-3--vicas-services-with-replicas)
 - [Lab 2 — Vica's services behind the Gateway](#lab-2--vicas-services-behind-the-gateway)
@@ -571,6 +572,17 @@ This section defines the team policy. **Documented rules are not proof that GitH
 - Keep secrets, `.env`, Firebase service-account keys and dependencies out of Git. Use placeholders in `.env.example`. Individual repos must apply their own `.gitignore` because the parent repo's ignore file does not govern submodule contents.
 
 Private repos admit the professor(s), not teammates, as required by the lab. Peer review of shared contracts happens in this public repo; the private owner applies the agreed contract in their own README. Do not require an unavailable teammate approval in private repo settings.
+
+## Lab 3 — Scaling up
+
+Lab 3 runs every service as 2–3 replicas that register with a new Service
+Discovery service. The Gateway spreads requests over them with round robin,
+every caller has a circuit breaker, every component serves `GET /status` and
+writes JSON logs, and Service Discovery alerts the team when a replica's load
+becomes critical. The rules every owner implements, and the shared tasks
+still to assign, are in [docs/lab-3-conventions.md](docs/lab-3-conventions.md).
+The Service Discovery repository is the one exception to the private-repo
+rule above: the lab asks to invite the professor and all teammates.
 
 ## Lab 2 — Running through the Gateway
 
