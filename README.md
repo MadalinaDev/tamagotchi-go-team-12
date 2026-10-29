@@ -43,14 +43,14 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 
 Since Lab 2 the **API Gateway** is the single entry point. Clients reach the system only through it, and services also call each other through it. The one exception is Guild's chat WebSocket: the gateway negotiates it, and the client then connects to Guild directly.
 
-Since Lab 3 services run as several replicas. Each instance registers with **Service Discovery**, which polls its `/status` and alerts the developers on Telegram; the Gateway balances requests round-robin across the healthy instances and evicts an instance whose circuit breaker trips.
+Since Lab 3 services run as several replicas. Each instance registers with **Service Discovery**, which polls its `/status` and alerts the developers on Telegram or Discord; the Gateway balances requests round-robin across the healthy instances and evicts an instance whose circuit breaker trips.
 
 ```mermaid
 flowchart LR
     C["Clients<br/>package apps, Postman"]
     GW["API Gateway<br/>Python · :8080<br/>JWT check via JWKS<br/>round-robin · circuit breaker<br/>5 s timeout · 50 concurrent tasks"]
-    SD["Service Discovery<br/>Python · :8090<br/>registry · /status polling<br/>load alerts"]
-    TG["Telegram<br/>developer alerts"]
+    SD["Service Discovery<br/>Python · :8089<br/>registry · /status polling<br/>load alerts"]
+    TG["Telegram / Discord<br/>developer alerts"]
     WS["Guild chat WebSocket<br/>:8083 · Guild's only<br/>public port"]
 
     subgraph SVC["Services · Docker network only (expose:)"]
@@ -68,10 +68,10 @@ flowchart LR
     SVC --- DB
     SVC -->|"⑤ Notification push"| F
     SVC -.->|"domain events<br/>today /internal/v1/dev/*<br/>through the gateway"| Q
-    SVC -->|"⑥ register on startup,<br/>heartbeat every 10 s"| SD
-    SD -->|"⑦ poll /status every 10 s"| SVC
-    GW -->|"⑧ read healthy instances every 2 s,<br/>evict on tripped breaker"| SD
-    SD -->|"⑨ unhealthy / critical load"| TG
+    SVC -->|"⑥ register on startup,<br/>heartbeat every 5 s"| SD
+    SD -->|"⑦ poll /status every 5 s"| SVC
+    GW -->|"⑧ read instances every 2 s,<br/>evict on tripped breaker"| SD
+    SD -->|"⑨ down / critical load"| TG
 ```
 
 **Request flow and WebSocket negotiation:**
@@ -588,41 +588,46 @@ the Discovery API and the ownership split are in
 [docs/lab-3-conventions.md](docs/lab-3-conventions.md). Every Lab 3 image is
 tagged **`0.4.0`** (+ `latest`).
 
-- **Service Discovery** (new private repository, Python like the Gateway,
-  `madalina060504/tamagotchi-service-discovery:0.4.0`, `expose: 8090`): instances
-  register on startup, heartbeat every 10 s and deregister on shutdown; an
-  instance without heartbeat for 30 s is dropped. Discovery polls every
-  instance's `/status` every 10 s, marks it unhealthy after 3 failed polls and
-  alerts on unhealthy instances and critical load (`utilization >= 0.8`),
-  through Telegram when `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` are set.
-- **Gateway `0.4.0`**: reads Discovery every 2 s and balances each service's
-  healthy instances **round-robin**; one circuit breaker per instance trips
-  after 3 failures in 17.5 s (5 s task timeout × 3.5), logs it, takes the
-  instance out of rotation and **evicts it from Discovery** for a 60 s
-  cooldown. A service with no registered instance still uses its static
-  `*_URL`, so services can migrate one at a time.
-- **Every service**: `GET /status` (load, uptime, request count), structured
-  logs carrying `instance_id`, a circuit breaker per dependency, and startup
-  that is safe when replicas start together.
-- **Battle and Tamagotchi `0.4.0`** (Sava) run as **3 replicas** each
-  (`deploy.replicas`). Startup seeding now takes a Postgres advisory lock
-  (three replicas used to race on the fixed seed IDs); migrations, the battle
-  coordinator and the outboxes already claim work with advisory locks and
-  `FOR UPDATE SKIP LOCKED`, so replicas never process the same battle or event
-  twice.
+- **Service Discovery** ([MadalinaDev/service-discovery](https://github.com/MadalinaDev/service-discovery),
+  submodule `services/service-discovery`, Python like the Gateway,
+  `madalina060504/tamagotchi-service-discovery:0.4.0`, port **8089**):
+  replicas register on startup (`POST /v1/instances`, Bearer
+  `DISCOVERY_TOKEN`), heartbeat every 5 s and deregister on shutdown; a
+  replica without heartbeat for 15 s is dropped. Discovery polls every
+  replica's `/status` every 5 s, marks it `down` after 2 failed polls and
+  alerts on down replicas and critical load (`utilization >= 0.8`) through
+  Telegram or Discord when the `ALERT_*` variables are set.
+- **Gateway `0.4.0`**: reads `GET /v1/services` every 2 s and balances each
+  service's replicas that are not `down` **round-robin**; one circuit breaker
+  per replica trips after 3 failures in 17.5 s (5 s task timeout × 3.5), logs
+  `circuit.opened`, takes the replica out of rotation and **evicts it from
+  Discovery** for a 30 s quarantine. A service with no registered replica
+  still uses its static `*_URL`, so services can migrate one at a time.
+- **Every service**: `GET /status` (load, checks, breakers), JSON logs with
+  `instance_id`, `event` and `request_id`, a circuit breaker per dependency,
+  and startup that is safe when replicas start together.
+- **Compose**: every migrated service runs **2 replicas**
+  (`deploy.replicas`); `--scale` takes one to 3 for the demo. Postgres allows
+  300 connections, since every replica opens its own pool.
+- **Battle and Tamagotchi `0.4.0`** (Sava): startup seeding takes a Postgres
+  advisory lock (replicas used to race on the fixed seed IDs); migrations,
+  the battle coordinator and the outboxes already claim work with advisory
+  locks and `FOR UPDATE SKIP LOCKED`, so replicas never process the same
+  battle or event twice.
 
-Run and watch it (`.env` needs `DISCOVERY_SECRET`, optionally the Telegram values):
+Run and watch it (`.env` needs `DISCOVERY_TOKEN`, optionally the `ALERT_*` values):
 
 ```sh
 docker compose up -d --wait
-curl http://localhost:8080/status                   # routing table and breaker states
+curl http://localhost:8089/v1/services              # registered replicas and their health
+curl http://localhost:8080/status                   # Gateway routing table and breaker states
 docker compose logs -f gateway-service service-discovery
-docker compose up -d --scale battle-service=2      # instances leave and join dynamically
-docker compose pause tamagotchi-service            # pauses every replica; use `docker pause <container>` for one
+docker compose up -d --scale battle-service=3      # replicas join and leave dynamically
+docker pause <container>                           # trips the Gateway's breaker for one replica
 ```
 
-The Gateway's access log names the instance that served each request
-(`instance=battle-…`), so round-robin and eviction are visible in
+The Gateway's `http.request` log line names the replica that served each
+request (`upstream_instance`), so round robin and eviction are visible in
 `docker compose logs`.
 
 ## Lab 2 — Running through the Gateway
