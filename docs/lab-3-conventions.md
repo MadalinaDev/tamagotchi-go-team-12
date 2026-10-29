@@ -15,15 +15,17 @@ Discovery polls every replica's **`/status`** and alerts the team when the
 load becomes critical. Logs are JSON lines with a request id that follows a
 request through every service.
 
-## Decisions
+## Open decisions
+
+Fill these in during the review of this page. Nothing else on the page
+depends on them.
 
 | Decision | Value |
 | --- | --- |
-| Language of Service Discovery (the team's banned language) | Python (FastAPI), like the Gateway |
-| Owner of the Service Discovery repository (creates it, invites everyone) | Mădălina ([MadalinaDev/service-discovery](https://github.com/MadalinaDev/service-discovery)); code, CI and README by Sava |
-| Owners of the shared tasks in section 1 | the cells below; Vica and Sabina can still take a shared task |
-| Alert channel (grade 9) | Telegram bot |
-| Service Discovery API | The one implemented in CPR #55 (section 5). The Gateway, Battle, Tamagotchi, Guild and Notification already speak it; Guild and Notification also keep the `/v1/instances` draft behind `DISCOVERY_API=v56` |
+| Language of Service Discovery (the team's banned language) | ____ |
+| Owner of the Service Discovery repository (creates it, invites everyone) | ____ |
+| Owners of the shared tasks in section 1 | the `____` cells below |
+| Alert channel (grade 9) | Discord webhook (proposed); Telegram or email are also allowed |
 
 ## 1. Grades, scope and owners
 
@@ -34,24 +36,24 @@ shared task.
 
 | Grade | Task | Done when | Owner |
 | --- | --- | --- | --- |
-| 2 | Service Discovery repository: private, README, PR policy and CI workflows, professor **and all teammates** as collaborators, submodule `services/service-discovery` in the CPR | The submodule points at a pushed commit and the invitations are accepted | Mădălina (repository, invitations); Sava (code, CI, README) |
-| 3 | `GET /status` in every service, the Gateway and Service Discovery (section 4) | Every container answers with the section 4 body | Each owner; Gateway Sava |
-| 3 | Structured logs everywhere (section 3) | `docker compose logs` shows the section 3 events as JSON lines | Each owner; Gateway Sava |
-| 4 | Service Discovery with the registration API (section 5), in the banned language, Dockerized and on Docker Hub | Image `0.4.0` is public and a service registers on startup | Sava |
-| 5 | Compose runs 2–3 replicas per service (section 11); every service registers and deregisters itself (section 6); the Gateway picks replicas up and drops them | `--scale` adds and removes replicas in the Gateway without restarting it | Compose Sava; each owner; Gateway Sava |
-| 6 | Round-robin load balancing in the Gateway (section 7); instance-agnostic business logic (section 9) | Consecutive requests reach different replicas; SSE, WebSocket and timers work with replicas | Gateway Sava; each owner |
-| 7 | Circuit breaker that trips and logs at 3 errors in 17.5 s, in every component that makes calls, for every endpoint (section 8) | Stopping a dependency logs `circuit.opened` | Each owner; Gateway Sava |
-| 8 | Service Discovery polls `/status` at an interval and logs alerts on critical load (section 10) | A load test logs `health.alert` | Sava |
-| 9 | The alerts reach the developers through Discord, Telegram or email (section 10) | The message arrives in the team channel | Sava |
-| 10 | The breaker removes the failing instance (section 8) | A failing replica disappears from Service Discovery and the Gateway | Gateway Sava; Service Discovery Sava |
+| 2 | Service Discovery repository: private, README, PR policy and CI workflows, professor **and all teammates** as collaborators, submodule `services/service-discovery` in the CPR | The submodule points at a pushed commit and the invitations are accepted | ____ |
+| 3 | `GET /status` in every service, the Gateway and Service Discovery (section 4) | Every container answers with the section 4 body | Each owner; Gateway ____ |
+| 3 | Structured logs everywhere (section 3) | `docker compose logs` shows the section 3 events as JSON lines | Each owner; Gateway ____ |
+| 4 | Service Discovery with the registration API (section 5), in the banned language, Dockerized and on Docker Hub | Image `0.4.0` is public and a service registers on startup | ____ |
+| 5 | Compose runs 2–3 replicas per service (section 11); every service registers and deregisters itself (section 6); the Gateway picks replicas up and drops them | `--scale` adds and removes replicas in the Gateway without restarting it | Compose ____; each owner; Gateway ____ |
+| 6 | Round-robin load balancing in the Gateway (section 7); instance-agnostic business logic (section 9) | Consecutive requests reach different replicas; SSE, WebSocket and timers work with replicas | Gateway ____; each owner |
+| 7 | Circuit breaker that trips and logs at 3 errors in 17.5 s, in every component that makes calls, for every endpoint (section 8) | Stopping a dependency logs `circuit.opened` | Each owner; Gateway ____ |
+| 8 | Service Discovery polls `/status` at an interval and logs alerts on critical load (section 10) | A load test logs `health.alert` | ____ |
+| 9 | The alerts reach the developers through Discord, Telegram or email (section 10) | The message arrives in the team channel | ____ |
+| 10 | The breaker removes the failing instance (section 8) | A failing replica disappears from Service Discovery and the Gateway | Gateway ____; Service Discovery ____ |
 
 ## 2. Names, ports, versions
 
 | Item | Value |
 | --- | --- |
-| Service Discovery compose service and port | `service-discovery`, **8090** (`expose:` only) |
-| Service Discovery repository and submodule | `MadalinaDev/service-discovery`, `services/service-discovery` |
-| Service Discovery image | `madalina060504/tamagotchi-service-discovery:0.4.0` (the repository's `DOCKERHUB_USERNAME` secret) |
+| Service Discovery compose service and port | `service-discovery`, **8089** |
+| Service Discovery repository and submodule | `<owner>/service-discovery`, `services/service-discovery` |
+| Service Discovery image | `<owner_dockerhub_username>/tamagotchi-service-discovery:0.4.0` |
 | Lab 3 image tag | **0.4.0** (+ `latest`) for every image changed in Lab 3; fixes `0.4.1`, … Compose pins `0.4.x`, never `latest` |
 | Service names on the wire | The Gateway's canonical names: `battle`, `tamagotchi`, `guild`, `notification`, `user-management`, `map`, `monster-raid`, `package-registry`, plus `gateway` |
 | Branches | `<type>/lab-3/<kebab-description>` from `dev`, as before |
@@ -106,7 +108,7 @@ Go: `log/slog` with `slog.NewJSONHandler` already writes `time`, `level` and
 | `error.unhandled` | ERROR | `error`, `stack` | An unexpected exception |
 
 Never log passwords, `Authorization` headers, JWTs, service tokens,
-`X-Gateway-Secret`, `X-Discovery-Secret`, chat tickets, webhook URLs or bot
+`X-Gateway-Secret`, `DISCOVERY_TOKEN`, chat tickets, webhook URLs or bot
 tokens, query strings, or request bodies with personal data. Log ids, not
 emails.
 
@@ -164,48 +166,51 @@ compose network.
 
 ## 5. Service Discovery API (grade 4)
 
-Base URL `http://service-discovery:8090` on the compose network. It is not
-behind the Gateway, because the Gateway depends on it. Every `/api/v1/*` route
-needs `X-Discovery-Secret: <DISCOVERY_SECRET>` (`401` without it); `/health`
-and `/status` are open. Field names are `snake_case` and errors use the shared
-envelope `{code, message, request_id, details[]}`.
+Base URL `http://service-discovery:8089` on the compose network. It is not
+behind the Gateway, because the Gateway depends on it. Writes need
+`Authorization: Bearer <DISCOVERY_TOKEN>`; reads are open. Field names are
+`snake_case` and errors use the shared envelope
+`{code, message, request_id, details[]}`.
 
 | Method and path | Caller | Request | Success | Errors |
 | --- | --- | --- | --- | --- |
-| `POST /api/v1/registry/instances` | Every replica, on startup | `Registration` | `201 Instance`; `200 Instance` when the same `instance_id` registers again (it is replaced) | `401`; `422 INVALID_FIELDS`; `409 INSTANCE_EVICTED` with `Retry-After` |
-| `PUT /api/v1/registry/instances/{instance_id}/heartbeat` | Every replica, every 10 s | — | `200 Instance` | `404 INSTANCE_NOT_FOUND`: register again; `409 INSTANCE_EVICTED` |
-| `DELETE /api/v1/registry/instances/{instance_id}` | Every replica, on shutdown | — | `204` | — |
-| `POST /api/v1/registry/instances/{instance_id}/evict` | Gateway, when a breaker removes a replica | `{reason, reporter}` | `200` | `404` |
-| `GET /api/v1/registry/services` | Gateway (every 2 s), people | — | `200 {services: {<service>: Instance[]}}`, healthy replicas only; `?all=true` lists every state | — |
-| `GET /api/v1/registry/services/{service}` | Anyone | — | `200 {service, instances: Instance[]}`, an empty list if there are none; `?all=true` as above | — |
+| `POST /v1/instances` | Every replica, on startup | `Registration` | `201 Instance`; `200 Instance` when the same `instance_id` registers again (it is replaced) | `401`; `422 INVALID_FIELDS`; `409 INSTANCE_EVICTED` with `Retry-After` |
+| `PUT /v1/instances/{instance_id}/heartbeat` | Every replica, every `heartbeat_interval_ms` | — | `200 Instance` | `404 INSTANCE_NOT_FOUND`: register again |
+| `DELETE /v1/instances/{instance_id}` | Every replica, on shutdown | — | `204` | `404` (already gone, fine) |
+| `POST /v1/instances/{instance_id}/evictions` | Gateway, when a breaker removes a replica | `{reason, failures, window_ms}` | `200 Instance` | `404` |
+| `GET /v1/services` | Gateway (every 2 s), people | — | `200 {services: {<service>: Instance[]}}` | — |
+| `GET /v1/services/{service}/instances` | Anyone | — | `200 {service, instances: Instance[]}`, an empty list if there are none | — |
 | `GET /health`, `GET /status` | Docker, people | — | Section 4 | — |
 
 ```text
-Registration = {service: string, instance_id: string, url: "http://<ip>:<port>",
-                status_url?: string (default <url>/status), version?: string}
-Instance     = {service, instance_id, url, status_url, version,
-                health: "healthy"|"unhealthy",
-                registered_at: Time, last_heartbeat_at: Time, last_status: Status|null}
+Registration = {service: string, instance_id: string, host: string, port: Int, version: string}
+Instance     = {service, instance_id, host, port, url: "http://<host>:<port>", version,
+                health: "unknown"|"up"|"down", load: Number|null,
+                registered_at: Time, last_heartbeat_at: Time,
+                heartbeat_interval_ms: Int, ttl_ms: Int}
 ```
 
-- `service` is a wire name from section 2.
+- `service` is a wire name from section 2, `instance_id` matches
+  `^[a-z0-9][a-z0-9._-]{0,99}$` and `port` is 1–65535.
 - The registry lives in memory. After a restart of Service Discovery, every
   replica's next heartbeat gets `404` and the replica registers again, so the
   registry refills within one heartbeat interval.
-- A replica without a heartbeat for `HEARTBEAT_TTL_SECONDS` (default 30 s,
-  three missed heartbeats) is removed and logged as expired.
-- A new replica counts as `healthy` until polls fail (section 10). The Gateway
-  routes only to `healthy` replicas.
-- An eviction (grade 10) removes the replica at once, logs it at `ERROR` and
-  sends an alert. For `EVICTION_COOLDOWN_SECONDS` (default 60 s) Discovery
-  answers that `instance_id`'s register and heartbeat calls with
-  `409 INSTANCE_EVICTED`. After that the replica registers again and rejoins
-  the rotation.
+- A replica without a heartbeat for `ttl_ms` (default 15 s, three missed
+  heartbeats) is removed and logged as `instance.expired`.
+- The `GET` routes list every registered replica with its last polled
+  `health` and `load` (section 10). `health` is `unknown` until the first
+  poll. The Gateway routes to every replica that is not `down`.
+- An eviction (grade 10) removes the replica at once, logs
+  `instance.removed` and sends an alert. For `EVICTION_QUARANTINE_MS`
+  (default 30 s) it refuses `POST /v1/instances` for that `instance_id` with
+  `409 INSTANCE_EVICTED` and `Retry-After`. After that the replica's own
+  heartbeat gets `404`, it registers again and rejoins the rotation.
 
-Service Discovery reads `PORT=8090`, `DISCOVERY_SECRET`,
-`HEARTBEAT_TTL_SECONDS=30` and `EVICTION_COOLDOWN_SECONDS=60`, plus the
-variables of section 10. The README of its repository documents every
-variable.
+Service Discovery reads `PORT=8089`, `DISCOVERY_TOKEN`,
+`HEARTBEAT_INTERVAL_MS=5000`, `INSTANCE_TTL_MS=15000` and
+`EVICTION_QUARANTINE_MS=30000`, plus the variables of section 10. With
+`DISCOVERY_TOKEN` empty, writes are not checked and it logs a warning at
+startup.
 
 ## 6. Registration in every service (grade 5)
 
@@ -213,13 +218,13 @@ New environment variables, with the same names everywhere:
 
 | Variable | Meaning | Default |
 | --- | --- | --- |
-| `DISCOVERY_URL` | Service Discovery base URL; empty = do not register (a repository run alone) | empty; `http://service-discovery:8090` in compose |
-| `DISCOVERY_SECRET` | Sent as `X-Discovery-Secret` on every Discovery call | from `.env` |
+| `DISCOVERY_URL` | Service Discovery base URL; empty = do not register (a repository run alone) | empty; `http://service-discovery:8089` in compose |
+| `DISCOVERY_TOKEN` | Bearer token for writes to Service Discovery | from `.env` |
 | `INSTANCE_ID` | Unique id of this replica | `<service>-<hostname>`; in Docker the hostname is the container id, so it matches `docker ps` |
-| `ADVERTISE_URL` (or `SERVICE_HOST`) | Address other containers use to reach this replica | `http://<this container's IPv4 address>:<PORT>` |
-| `HEARTBEAT_INTERVAL` | Heartbeat period | 10 s |
+| `SERVICE_HOST` | Address other containers use to reach this replica | this container's IPv4 address |
+| `HEARTBEAT_INTERVAL_MS` | Heartbeat period until Service Discovery answers with its own | `5000` |
 | `DB_POOL_SIZE` | Most database connections one replica opens (section 11) | `5` |
-| Circuit breaker threshold, window and open time | Section 8; names follow each repository's settings style | `3`, 17.5 s, 17.5–30 s |
+| `CIRCUIT_BREAKER_FAILURES`, `CIRCUIT_BREAKER_WINDOW_MS`, `CIRCUIT_BREAKER_OPEN_MS` | Section 8 | `3`, `17500`, `17500` |
 | `LOG_LEVEL` | Section 3 | `INFO` |
 
 Register the container's IP address, not the compose service name. With
@@ -232,13 +237,13 @@ Lifecycle:
 
 1. Start the HTTP server, and register only once it listens, so nothing is
    routed to a replica that cannot answer yet.
-2. `POST /api/v1/registry/instances`. On a network error or a `5xx`, retry with backoff
+2. `POST /v1/instances`. On a network error or a `5xx`, retry with backoff
    (1 s, 2 s, 4 s, … at most 10 s) until it works, and keep serving
    meanwhile. On `409 INSTANCE_EVICTED`, wait for `Retry-After`.
-3. Send a heartbeat every 10 s. On `404`,
+3. Send a heartbeat every `heartbeat_interval_ms` of the answer. On `404`,
    register again (Service Discovery restarted, the TTL ran out or the replica
    was evicted). On other failures, log and keep the loop running.
-4. On SIGTERM or SIGINT, `DELETE /api/v1/registry/instances/{instance_id}` (best effort,
+4. On SIGTERM or SIGINT, `DELETE /v1/instances/{instance_id}` (best effort,
    1 s timeout), then let the requests in flight finish and exit. `docker stop`
    waits 10 s.
 5. With `DISCOVERY_URL` empty, log `discovery.disabled` once and skip the
@@ -249,7 +254,7 @@ Discovery polls it too. It is never load-balanced.
 
 ## 7. Gateway: discovery and round robin (grades 5–6)
 
-- Every `DISCOVERY_REFRESH_SECONDS` (2 s) fetch `GET /api/v1/registry/services` and replace
+- Every `DISCOVERY_REFRESH_MS` (2000 ms) fetch `GET /v1/services` and replace
   the replica lists. When Service Discovery does not answer, keep the last
   good lists and log once per outage. Before the first good answer, and for a
   service without registered replicas, use the static `*_URL` (the compose
@@ -264,7 +269,7 @@ Discovery polls it too. It is never load-balanced.
   answers are **not** retried on another replica for `POST`, `PUT`, `PATCH`
   and `DELETE`, because the first replica may already have done the work.
 - The access log line of every proxied request names the replica
-  (`instance=<instance_id>`), so `docker compose logs -f gateway-service` shows the
+  (`upstream_instance`), so `docker compose logs -f gateway-service` shows the
   rotation. Returning it as an `X-Upstream-Instance` header is optional, for
   the demo.
 - The Gateway's own `GET /status` lists the replicas it routes to per service
@@ -282,8 +287,7 @@ timeout**, which is 3.5 × 5 s = **17.5 s**.
 - **Where:** inside the one HTTP client each component uses for its outgoing
   calls, so every endpoint is covered without code per route.
 - **States:** closed → (3 failures within 17.5 s) → **open** for
-  the open time (17.5 s in Guild and Notification, 30 s in the
-  Gateway, Battle and Tamagotchi) → **half-open**, which lets exactly one
+  `CIRCUIT_BREAKER_OPEN_MS` (17.5 s) → **half-open**, which lets exactly one
   trial call through. Its success closes the breaker (`circuit.closed`); its
   failure opens it again. Calls refused while open log `circuit.rejected`.
   Every `/status` lists its breakers (section 4).
@@ -291,7 +295,7 @@ timeout**, which is 3.5 × 5 s = **17.5 s**.
 | Component | One breaker per | Trip (grade 7) | Remove (grade 10) |
 | --- | --- | --- | --- |
 | Each service (its calls go through the Gateway) | Dependency, by wire name (`tamagotchi`, `guild`, …) | Log `circuit.opened`; while open, answer `503 DEPENDENCY_UNAVAILABLE` at once, without calling | The same: the dependency is out of this caller's rotation until a trial call succeeds |
-| Gateway | Upstream replica (`instance_id`) | Log `circuit.opened`; skip the replica in round robin while open | Drop the replica from the pool and call `POST /api/v1/registry/instances/{instance_id}/evict`, so that every client stops using it; log `instance.removed` |
+| Gateway | Upstream replica (`instance_id`) | Log `circuit.opened`; skip the replica in round robin while open | Drop the replica from the pool and call `POST /v1/instances/{instance_id}/evictions`, so that every client stops using it; log `instance.removed` |
 | Service Discovery | Notification channel | Its `/status` polls are health checks: they set `health` (section 10) instead of tripping a breaker. A broken webhook trips the channel's breaker | — |
 
 Discovery traffic itself (registration, heartbeats, the Gateway's refresh)
@@ -346,22 +350,23 @@ their rows in their Lab 3 PR:
 ## 10. Health polling and alerts (grades 8–9)
 
 Service Discovery polls `GET <url>/status` of every registered replica every
-`HEALTH_CHECK_INTERVAL_SECONDS` (10 s) with a 2 s timeout
-(`HEALTH_CHECK_TIMEOUT_SECONDS`).
+`HEALTH_POLL_INTERVAL_MS` (5000 ms) with a 2 s timeout.
 
 | Condition | Rule | Log | Notification (grade 9) |
 | --- | --- | --- | --- |
+| High load | `utilization` ≥ `LOAD_WARN_THRESHOLD` (0.6) | `health.alert`, WARN | no |
 | Critical load | `utilization` ≥ `LOAD_CRITICAL_THRESHOLD` (0.8) | `health.alert`, ERROR | yes |
-| Down | `UNHEALTHY_AFTER_FAILURES` (3) failed polls in a row; `health` becomes `unhealthy` | `health.alert`, ERROR | yes |
+| Down | 2 failed polls in a row; `health` becomes `down` | `health.alert`, ERROR | yes |
 | Evicted | Section 5 | `instance.removed`, ERROR | yes |
-| Recovered | Load back under 0.8, or answering again | `health.recovered`, INFO | yes, if the alert was sent |
+| Recovered | Load back under 0.6, or answering again | `health.recovered`, INFO | yes, if the alert was sent |
 
 - Alert when a condition **starts or ends**, not on every poll. While it lasts,
-  repeat it at most every `ALERT_REPEAT_SECONDS` (300 s).
-- Channel: Telegram, `TELEGRAM_BOT_TOKEN` with `TELEGRAM_CHAT_ID` (empty = off:
-  the alert is only logged; the values live only in `.env`). Sending runs in the
+  repeat it at most every `ALERT_REPEAT_MS` (300000 ms).
+- Channels (empty = off; the values live only in `.env`):
+  `ALERT_DISCORD_WEBHOOK_URL`, or `ALERT_TELEGRAM_BOT_TOKEN` with
+  `ALERT_TELEGRAM_CHAT_ID`, or SMTP settings for email. Sending runs in the
   background and never delays polling; a failure is logged as `alert.failed`.
-  The bot token is a secret: anyone who has it can post as the bot.
+  A webhook URL is a secret: anyone who has it can post in the channel.
 - Message format:
   `[CRITICAL] monster-raid / monster-raid-3f9a1c2b7d4e: load 0.86 (43/50 tasks) at 2026-10-28T20:15:03Z`.
 
@@ -371,8 +376,9 @@ the Gateway, for example
 
 ## 11. Compose (grade 5)
 
-- Add `service-discovery` with `expose: 8090`. Every service and the Gateway
-  get `DISCOVERY_URL` and `DISCOVERY_SECRET` (the `x-discovery-env` anchor); the Gateway also gets `depends_on: service-discovery`.
+- Add `service-discovery`. Publish `8089` for the demo (writes still need the
+  token). Every service and the Gateway get `DISCOVERY_URL` and
+  `DISCOVERY_TOKEN`; the Gateway also gets `depends_on: service-discovery`.
   Services do not need it, because registration retries.
 - Replicas: `deploy: { replicas: 2 }` on every service (Guild only once
   section 9 is solved for it), and 3 for the demo with
@@ -386,7 +392,7 @@ the Gateway, for example
   `docker compose up -d --wait` waits for every replica. The NestJS images
   have no `curl`; use
   `node -e "fetch('http://127.0.0.1:<port>/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"`.
-- `.env.example` gets `DISCOVERY_SECRET` and empty Telegram variables.
+- `.env.example` gets `DISCOVERY_TOKEN` and empty alert variables.
 
 ## 12. Delivery and demo
 
@@ -397,10 +403,11 @@ check that it has the memory before the presentation day.
 
 Definition of done, from the CPR alone:
 
-1. `docker compose up -d --wait`, then `curl http://localhost:8080/status`
-   (the Gateway's routing table) lists 2–3 replicas of every service.
+1. `docker compose up -d --wait`, then
+   `curl http://localhost:8089/v1/services` lists 2–3 replicas of every
+   service.
 2. Repeating one request through the Gateway shows a different
-   `instance=` in the Gateway access log each time.
+   `upstream_instance` in the Gateway log each time.
 3. `docker compose up -d --scale monster-raid-service=3`: the third replica
    registers and gets traffic. `docker compose stop` of one replica
    deregisters it at once.
