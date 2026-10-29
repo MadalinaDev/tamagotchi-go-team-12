@@ -132,12 +132,16 @@ Owners of affected services, please review the sections that concern you: the ga
   - a message sent over REST to the `8084` replica arrived on that socket as `chat.message`;
   - `/status` of each replica showed its own `instance_id` and version `0.4.0`;
   - the logs were JSON lines, including `chat.listening` and `discovery.register_failed` with backoff 1, 2, 4, 8 s, because no Service Discovery was running.
+- **With Service Discovery.** The `MadalinaDev/service-discovery` repository (`dev`, built locally) ran with the published `0.4.0` images at 2 + 2 replicas:
+  - all four replicas registered with the v55 API and were polled `healthy`; the poller read `load.utilization` from `/status`;
+  - `--scale guild-service=3` registered the third replica, and `docker stop` deregistered it at once;
+  - after a Service Discovery restart, every replica got `404` on its next heartbeat and registered again by itself.
 - **Single image.** One Notification image was run with an unreachable `DISCOVERY_URL` and stopped with `SIGTERM`: it logged `service.stopping`, then attempted deregistration (`discovery.deregister_failed`), then exited.
 
 ## Open items
 
 | Item | Depends on |
 | --- | --- |
-| End-to-end registration, round robin and eviction with the real Service Discovery | The `service-discovery` repository and image, and the choice between #55 and #56 |
+| Round robin and eviction through the gateway with Service Discovery | The published Service Discovery image and the Lab 3 gateway (`feat/lab-3/discovery-load-balancing`) |
 | Gateway proxies Guild's WebSocket, so that `8083` is no longer published | Gateway owner |
 | `SKIP LOCKED` claiming of push retries | Real FCM delivery with retries (later lab) |
