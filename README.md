@@ -13,6 +13,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
 - [Lab 3 — Scaling up with Service Discovery](#lab-3--scaling-up-with-service-discovery)
+- [Lab 3 — Sabina's services with replicas](#lab-3--sabinas-services-with-replicas)
 - [Lab 2 — Running through the Gateway](#lab-2--running-through-the-gateway)
 - [Lab 3 — Vica's services with replicas](#lab-3--vicas-services-with-replicas)
 - [Lab 2 — Vica's services behind the Gateway](#lab-2--vicas-services-behind-the-gateway)
@@ -629,6 +630,28 @@ docker pause <container>                           # trips the Gateway's breaker
 The Gateway's `http.request` log line names the replica that served each
 request (`upstream_instance`), so round robin and eviction are visible in
 `docker compose logs`.
+
+## Lab 3 — Sabina's services with replicas
+
+Monster Raid and Package Registry `0.4.0` follow the Lab 3 conventions (CPR #55 / #56; both Service Discovery drafts are supported through `DISCOVERY_API`). The details and what was verified are in the [Lab 3 contract notes](docs/lab-3-contract-sabina.md).
+
+**What changed:**
+
+- **`GET /health` and `GET /status`** on every replica: load, database check, breaker states (no secret, not counted by the task limit).
+- **Structured JSON logs** with `service`, `instance_id`, `event` and `request_id`; `X-Request-Id` is forwarded on every outgoing call.
+- **Service Discovery.** Each replica registers after it listens, sends heartbeats, waits out an eviction cooldown and deregisters on `SIGTERM`. Until Service Discovery answers, registration retries with backoff and requests are served normally.
+- **Circuit breaker** per dependency: 3 failures in 17.5 s open it for 17.5 s (`503 DEPENDENCY_UNAVAILABLE` with `Retry-After`), then one trial call.
+- **Replicas: 2 each.**
+  - Monster Raid's live HP stream gets the attacks of every replica through Postgres `LISTEN`/`NOTIFY`.
+  - Package Registry keeps all state in Postgres; its seed runs once, under table locks.
+
+**Show it** (after `docker compose up -d --wait`):
+
+```sh
+docker compose ps monster-raid-service package-registry-service    # two replicas each
+docker compose exec monster-raid-service node -e "fetch('http://127.0.0.1:8087/status').then(r=>r.text()).then(console.log)"
+docker compose logs monster-raid-service | grep '"event":"live.listening"'
+```
 
 ## Lab 2 — Running through the Gateway
 
