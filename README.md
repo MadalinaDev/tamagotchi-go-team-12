@@ -13,6 +13,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
 - [Lab 2 — Running through the Gateway](#lab-2--running-through-the-gateway)
+- [Lab 3 — Vica's services with replicas](#lab-3--vicas-services-with-replicas)
 - [Lab 2 — Vica's services behind the Gateway](#lab-2--vicas-services-behind-the-gateway)
 - [Lab 2 — User Management and Map behind the Gateway](#lab-2--user-management-and-map-behind-the-gateway)
 - [Lab 1 — Running the whole system](#lab-1--running-the-whole-system)
@@ -617,6 +618,29 @@ challenge/decline and selection flows through the Gateway. Full battle
 accept → settlement relies on the convention packages and registrations that
 Package Registry `0.3.1` seeds (`SEED_ON_START=true`); Guild chat tickets
 are served by Guild `0.3.0`.
+
+## Lab 3 — Vica's services with replicas
+
+Guild and Notification `0.4.0` follow the Lab 3 conventions (CPR #55 / #56; both Service Discovery drafts are supported through `DISCOVERY_API`). The details and what was verified are in the [Lab 3 contract notes](docs/lab-3-contract-vica.md).
+
+**What changed:**
+
+- **`GET /status`** on every replica: load, database check, breaker states (no secret, not counted by the task limit).
+- **Structured JSON logs** with `service`, `instance_id`, `event` and `request_id`; `X-Request-Id` is forwarded on every outgoing call.
+- **Service Discovery.** Each replica registers after it listens, sends heartbeats and deregisters on `SIGTERM`. Until Service Discovery answers, registration retries with backoff and requests are served normally.
+- **Circuit breaker** per dependency: 3 failures in 17.5 s open it for 17.5 s (`503 DEPENDENCY_UNAVAILABLE`), then one trial call.
+- **Replicas: 2 each.**
+  - Guild's chat tickets are in the database, and chat events reach every replica through Postgres `LISTEN`/`NOTIFY`, so a message sent to any replica reaches every socket.
+  - Guild publishes `8083-8085:8083`; the gateway still hands out `ws://localhost:8083`.
+  - Notification keeps all state in the database.
+
+**Show it** (after `docker compose up -d --wait`):
+
+```sh
+docker compose ps guild-service notification-service    # two replicas each
+curl -s localhost:8083/status                            # instance_id, load, breakers
+docker compose logs guild-service | grep '"event":"chat.listening"'
+```
 
 ## Lab 2 — Vica's services behind the Gateway
 
