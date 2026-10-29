@@ -29,9 +29,10 @@ x-service-env: &service-env
   RUN_MIGRATIONS: "true"
   AUTH_MODE: mock
 
-# Lab 3 settings of Guild and Notification (docs/lab-3-contract-vica.md).
-# They register with Service Discovery on startup and keep retrying until it
-# answers. DISCOVERY_API picks the draft: v55 (/api/v1/registry/*, port 8090,
+# Lab 3 settings of Guild, Notification, Monster Raid and Package Registry
+# (docs/lab-3-contract-vica.md, docs/lab-3-contract-sabina.md). They register
+# with Service Discovery on startup and keep retrying until it answers.
+# DISCOVERY_API picks the draft: v55 (/api/v1/registry/*, port 8090,
 # X-Discovery-Secret) or v56 (/v1/instances, port 8089, Bearer token).
 x-vica-lab3-env: &vica-lab3-env
   DISCOVERY_URL: ${DISCOVERY_URL:-http://service-discovery:8090}
@@ -294,11 +295,15 @@ services:
 
   monster-raid-service:
     <<: *service
-    image: sabinapopescu/tamagotchi-monster-raid-service:0.3.2
+    # 0.4.0: /status, JSON logs, Service Discovery, circuit breakers, and live HP
+    # across replicas through Postgres NOTIFY (docs/lab-3-contract-sabina.md).
+    image: sabinapopescu/tamagotchi-monster-raid-service:0.4.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
+    deploy:
+      replicas: 2
     environment:
-      <<: *service-env
+      <<: [*service-env, *vica-lab3-env]
       PORT: "8087"
       DB_NAME: raid_db
       DB_USER: raid_user
@@ -320,11 +325,15 @@ services:
 
   package-registry-service:
     <<: *service
-    image: sabinapopescu/tamagotchi-package-registry-service:0.3.1
+    # 0.4.0: /status, JSON logs, Service Discovery, circuit breakers; all state is
+    # in Postgres, so replicas are interchangeable (docs/lab-3-contract-sabina.md).
+    image: sabinapopescu/tamagotchi-package-registry-service:0.4.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
+    deploy:
+      replicas: 2
     environment:
-      <<: *service-env
+      <<: [*service-env, *vica-lab3-env]
       PORT: "8088"
       DB_NAME: registry_db
       DB_USER: registry_user
