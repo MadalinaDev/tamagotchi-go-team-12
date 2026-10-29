@@ -29,6 +29,17 @@ x-service-env: &service-env
   RUN_MIGRATIONS: "true"
   AUTH_MODE: mock
 
+# Lab 3 settings of Guild and Notification (docs/lab-3-contract-vica.md).
+# They register with Service Discovery on startup and keep retrying until it
+# answers. DISCOVERY_API picks the draft: v55 (/api/v1/registry/*, port 8090,
+# X-Discovery-Secret) or v56 (/v1/instances, port 8089, Bearer token).
+x-vica-lab3-env: &vica-lab3-env
+  DISCOVERY_URL: ${DISCOVERY_URL:-http://service-discovery:8090}
+  DISCOVERY_API: ${DISCOVERY_API:-v55}
+  DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+  DB_POOL_SIZE: "5"
+  LOG_LEVEL: INFO
+
 services:
   postgres:
     # PostGIS is needed only by map-service; the same image serves all DBs.
@@ -165,9 +176,13 @@ services:
         condition: service_healthy
       gateway-service:
         condition: service_started
-    image: nikvnln/tamagotchi-guild-service:0.3.0
+    image: nikvnln/tamagotchi-guild-service:0.4.0
+    # Lab 3: chat tickets live in the database and chat events reach every
+    # replica through Postgres LISTEN/NOTIFY, so any replica can serve a socket.
+    deploy:
+      replicas: 2
     environment:
-      <<: *service-env
+      <<: [*service-env, *vica-lab3-env]
       PORT: "8083"
       STORAGE: postgres
       DB_NAME: guild_db
@@ -185,7 +200,10 @@ services:
     ports:
       # Published only for the direct chat WebSocket that the gateway hands
       # out (GUILD_PUBLIC_WS_URL); REST still requires the gateway secret.
-      - "8083:8083"
+      # A range, so that every replica gets a host port (up to 3 replicas);
+      # the gateway hands out 8083, and the other replicas still deliver
+      # every message to its sockets through LISTEN/NOTIFY.
+      - "8083-8085:8083"
 
   notification-service:
     <<: *service
@@ -194,9 +212,12 @@ services:
         condition: service_healthy
       gateway-service:
         condition: service_started
-    image: nikvnln/tamagotchi-notification-service:0.3.0
+    image: nikvnln/tamagotchi-notification-service:0.4.0
+    # Lab 3: all state is in the database, so replicas are interchangeable.
+    deploy:
+      replicas: 2
     environment:
-      <<: *service-env
+      <<: [*service-env, *vica-lab3-env]
       PORT: "8084"
       STORAGE: postgres
       DB_NAME: notification_db
