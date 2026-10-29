@@ -110,6 +110,7 @@ Owners of affected services, please review the sections that concern you: the ga
   | --- | --- | --- |
   | [`sabinapopescu/tamagotchi-monster-raid-service:0.4.0`](https://hub.docker.com/r/sabinapopescu/tamagotchi-monster-raid-service) | sabinapopescu/monster-raid-service#10 | `services/monster-raid-service` at `e0b09e1` |
   | [`sabinapopescu/tamagotchi-package-registry-service:0.4.0`](https://hub.docker.com/r/sabinapopescu/tamagotchi-package-registry-service) | sabinapopescu/package-registry-service#8 | `services/package-registry-service` at `7c99413` |
+
 - **Replicas.** `deploy.replicas: 2` for both, `expose:` only.
 - **Lab 3 settings.** Both services use the shared anchor `x-vica-lab3-env`, like Guild and Notification: `DISCOVERY_URL` defaults to `http://service-discovery:8090` and `DISCOVERY_API` to `v55`; with draft #56, set `DISCOVERY_URL=http://service-discovery:8089` and `DISCOVERY_API=v56` in `.env`.
 - **Without Service Discovery.** Until a `service-discovery` container is in the compose file, both services log `discovery.register_failed` with backoff and serve normally. The gateway reaches them through the static `RAID_URL` and `REGISTRY_URL`. Gateway 0.3.1 keeps one connection to the DNS name, so requests stay on one replica; round robin comes with gateway-service#10.
