@@ -1,7 +1,7 @@
-# Tamagotchi Go, Team 12: common deployment for Lab 2.
+# Tamagotchi Go, Team 12: common deployment for Lab 3.
 #
 # Only published Docker Hub images are used (no `build:`); every image is
-# built in its private repository and pushed as <owner>/<image>:0.3.0.
+# built in its private repository and pushed as <owner>/<image>:<version>.
 #
 # Usage:
 #   cp .env.example .env     # set the passwords, tokens and secrets (letters, digits and underscores)
@@ -14,6 +14,11 @@
 # (sections 2-4 and 10); the Lab 2 routing, auth and limits follow
 # docs/lab-2-conventions.md. The Gateway (port 8080) is the only REST
 # entry point; migrated services use `expose:` instead of `ports:`.
+#
+# Lab 3 (docs/lab-3-conventions.md): every migrated service runs as two
+# replicas that register with service-discovery; the Gateway balances them
+# round-robin. Three for the demo:
+#   docker compose up -d --scale user-management-service=3
 
 name: tamagotchi-go
 
@@ -29,15 +34,15 @@ x-service-env: &service-env
   RUN_MIGRATIONS: "true"
   AUTH_MODE: mock
 
-# Lab 3 settings of Guild, Notification, Monster Raid and Package Registry
-# (docs/lab-3-contract-vica.md, docs/lab-3-contract-sabina.md). They register
-# with Service Discovery on startup and keep retrying until it answers.
-# DISCOVERY_API picks the draft: v55 (/api/v1/registry/*, port 8090,
-# X-Discovery-Secret) or v56 (/v1/instances, port 8089, Bearer token).
-x-vica-lab3-env: &vica-lab3-env
-  DISCOVERY_URL: ${DISCOVERY_URL:-http://service-discovery:8090}
-  DISCOVERY_API: ${DISCOVERY_API:-v55}
-  DISCOVERY_SECRET: ${DISCOVERY_SECRET:-}
+# Lab 3 settings of every service that registers with Service Discovery
+# (conventions sections 6 and 11): the merged contract (#56), so /v1/instances
+# on port 8089 with `Authorization: Bearer <DISCOVERY_TOKEN>`. DISCOVERY_API
+# selects that contract in Guild, Notification, Monster Raid and Package
+# Registry; User Management and Map implement only #56 and ignore it.
+x-lab3-env: &lab3-env
+  DISCOVERY_URL: http://service-discovery:8089
+  DISCOVERY_API: v56
+  DISCOVERY_TOKEN: ${DISCOVERY_TOKEN:?set DISCOVERY_TOKEN in .env}
   DB_POOL_SIZE: "5"
   LOG_LEVEL: INFO
 
@@ -63,6 +68,8 @@ services:
     ports:
       # Published so services can also be run locally with DB_HOST=localhost.
       - "${POSTGRES_HOST_PORT:-5432}:5432"
+    # Replicas multiply the connection pools; each one is capped by DB_POOL_SIZE.
+    command: ["postgres", "-c", "max_connections=300"]
     healthcheck:
       # TCP check: during init Postgres listens only on the Unix socket, so
       # this turns healthy only after the init scripts have finished.
@@ -72,14 +79,37 @@ services:
       retries: 20
     restart: unless-stopped
 
+  service-discovery:
+    # Lab 3: registry of the running replicas (conventions section 5). It polls
+    # every replica's GET /status and alerts on Discord or Telegram (section 10).
+    image: madalina060504/tamagotchi-service-discovery:0.4.0
+    # Published for amd64 only; runs emulated on Apple Silicon.
+    platform: linux/amd64
+    environment:
+      PORT: "8089"
+      DISCOVERY_TOKEN: ${DISCOVERY_TOKEN:?set DISCOVERY_TOKEN in .env}
+      # Empty = alerts are only logged.
+      ALERT_DISCORD_WEBHOOK_URL: ${ALERT_DISCORD_WEBHOOK_URL:-}
+      ALERT_TELEGRAM_BOT_TOKEN: ${ALERT_TELEGRAM_BOT_TOKEN:-}
+      ALERT_TELEGRAM_CHAT_ID: ${ALERT_TELEGRAM_CHAT_ID:-}
+      LOG_LEVEL: INFO
+    ports:
+      # Published for the demo: curl http://localhost:8089/v1/services
+      # (writes still need the token).
+      - "8089:8089"
+    restart: unless-stopped
+
   gateway-service:
-    # 0.3.1: published by the gateway repository's CI (gateway-service#9).
-    image: madalina060504/tamagotchi-gateway-service:0.3.1
+    # 0.4.0 (Lab 3): replicas from service-discovery, round-robin, circuit
+    # breaker per replica and eviction (gateway-service#10).
+    image: madalina060504/tamagotchi-gateway-service:0.4.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     depends_on:
       postgres:
         condition: service_healthy
+      service-discovery:
+        condition: service_started
     environment:
       PORT: "8080"
       BATTLE_URL: http://battle-service:8081
@@ -109,6 +139,12 @@ services:
       GATEWAY_ADMIN_USER_IDS: ${GATEWAY_ADMIN_USER_IDS:-00000000-0000-4000-8000-000000000009}
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
+      # Lab 3: the *_URL values above stay the fallback for a service without
+      # registered replicas. The Gateway registers itself as `gateway`.
+      DISCOVERY_URL: http://service-discovery:8089
+      DISCOVERY_TOKEN: ${DISCOVERY_TOKEN:?set DISCOVERY_TOKEN in .env}
+      DISCOVERY_REFRESH_MS: "2000"
+      LOG_LEVEL: INFO
     ports:
       - "8080:8080"
 
@@ -183,7 +219,7 @@ services:
     deploy:
       replicas: 2
     environment:
-      <<: [*service-env, *vica-lab3-env]
+      <<: [*service-env, *lab3-env]
       PORT: "8083"
       STORAGE: postgres
       DB_NAME: guild_db
@@ -218,7 +254,7 @@ services:
     deploy:
       replicas: 2
     environment:
-      <<: [*service-env, *vica-lab3-env]
+      <<: [*service-env, *lab3-env]
       PORT: "8084"
       STORAGE: postgres
       DB_NAME: notification_db
@@ -242,13 +278,17 @@ services:
         condition: service_healthy
       gateway-service:
         condition: service_started
-    # 0.3.0: behind the Gateway, roles in access tokens, task limits (docs/lab-2-contract-madalina.md).
+    # 0.4.0 (Lab 3, docs/lab-3-contract-madalina.md): registers with
+    # service-discovery, GET /status, circuit breaker, JSON logs, and one JWT
+    # signing key shared by all replicas through user_management_db.
     # The Gateway reads its JWKS directly from this service; everything else comes through the Gateway.
-    image: madalina060504/tamagotchi-user-management-service:0.3.0
+    image: madalina060504/tamagotchi-user-management-service:0.4.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
+    deploy:
+      replicas: 2
     environment:
-      <<: *service-env
+      <<: [*service-env, *lab3-env]
       AUTH_MODE: gateway
       PORT: "8085"
       DB_NAME: user_management_db
@@ -271,12 +311,16 @@ services:
         condition: service_healthy
       gateway-service:
         condition: service_started
-    # 0.3.0: behind the Gateway, SSE stream GET /api/v1/map/stream, task limits.
-    image: madalina060504/tamagotchi-map-service:0.3.0
+    # 0.4.0 (Lab 3, docs/lab-3-contract-madalina.md): registers with
+    # service-discovery, GET /status, circuit breaker on User Management, JSON
+    # logs; SSE stream GET /api/v1/map/stream, task limits.
+    image: madalina060504/tamagotchi-map-service:0.4.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
+    deploy:
+      replicas: 2
     environment:
-      <<: *service-env
+      <<: [*service-env, *lab3-env]
       AUTH_MODE: gateway
       PORT: "8086"
       DB_NAME: map_db
@@ -303,7 +347,7 @@ services:
     deploy:
       replicas: 2
     environment:
-      <<: [*service-env, *vica-lab3-env]
+      <<: [*service-env, *lab3-env]
       PORT: "8087"
       DB_NAME: raid_db
       DB_USER: raid_user
@@ -333,7 +377,7 @@ services:
     deploy:
       replicas: 2
     environment:
-      <<: [*service-env, *vica-lab3-env]
+      <<: [*service-env, *lab3-env]
       PORT: "8088"
       DB_NAME: registry_db
       DB_USER: registry_user
