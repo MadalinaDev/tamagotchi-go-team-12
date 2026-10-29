@@ -12,7 +12,11 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Communication contract](#communication-contract)
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
+- [Lab 3 — Scaling up](#lab-3--scaling-up)
+- [Lab 3 — Service Discovery, Gateway, User Management and Map](#lab-3--service-discovery-gateway-user-management-and-map)
+- [Lab 3 — Sabina's services with replicas](#lab-3--sabinas-services-with-replicas)
 - [Lab 2 — Running through the Gateway](#lab-2--running-through-the-gateway)
+- [Lab 3 — Vica's services with replicas](#lab-3--vicas-services-with-replicas)
 - [Lab 2 — Vica's services behind the Gateway](#lab-2--vicas-services-behind-the-gateway)
 - [Lab 2 — User Management and Map behind the Gateway](#lab-2--user-management-and-map-behind-the-gateway)
 - [Lab 1 — Running the whole system](#lab-1--running-the-whole-system)
@@ -571,6 +575,59 @@ This section defines the team policy. **Documented rules are not proof that GitH
 
 Private repos admit the professor(s), not teammates, as required by the lab. Peer review of shared contracts happens in this public repo; the private owner applies the agreed contract in their own README. Do not require an unavailable teammate approval in private repo settings.
 
+## Lab 3 — Scaling up
+
+Lab 3 runs every service as 2–3 replicas that register with a new Service
+Discovery service. The Gateway spreads requests over them with round robin,
+every caller has a circuit breaker, every component serves `GET /status` and
+writes JSON logs, and Service Discovery alerts the team when a replica's load
+becomes critical. The rules every owner implements, and the shared tasks
+still to assign, are in [docs/lab-3-conventions.md](docs/lab-3-conventions.md).
+The Service Discovery repository is the one exception to the private-repo
+rule above: the lab asks to invite the professor and all teammates.
+
+## Lab 3 — Service Discovery, Gateway, User Management and Map
+
+Service Discovery `0.4.0`, the Gateway `0.4.0` and User Management and Map `0.4.0` follow the [Lab 3 conventions](docs/lab-3-conventions.md) (#56). The details and what was verified are in [Mădălina's Lab 3 contract notes](docs/lab-3-contract-madalina.md).
+
+- **Service Discovery** ([MadalinaDev/service-discovery](https://github.com/MadalinaDev/service-discovery), port 8089):
+  - registration with heartbeats, a TTL and Gateway evictions;
+  - `GET /status` polls of every replica every 5 s, with high/critical load and down alerts to Discord or Telegram (`ALERT_*` in `.env`).
+- **Gateway** (gateway-service#10): round-robin over the registered replicas of each service, and a circuit breaker per replica. 3 failures within 17.5 s evict the replica from Service Discovery. Services that do not register yet keep their configured URL.
+- **Replicas.** User Management and Map run as two replicas. Guild, Notification, Monster Raid and Package Registry now register with the merged contract (`DISCOVERY_API=v56`).
+
+Run and look:
+
+```sh
+docker compose up -d --wait
+curl http://localhost:8089/v1/services          # every registered replica, with health and load
+curl http://localhost:8080/status               # the Gateway's routing table and breakers
+docker compose up -d --scale user-management-service=3
+docker compose logs -f gateway-service          # access lines name the replica that answered
+```
+
+## Lab 3 — Sabina's services with replicas
+
+Monster Raid and Package Registry `0.4.0` follow the Lab 3 conventions (CPR #55 / #56; both Service Discovery drafts are supported through `DISCOVERY_API`). The details and what was verified are in the [Lab 3 contract notes](docs/lab-3-contract-sabina.md).
+
+**What changed:**
+
+- **`GET /health` and `GET /status`** on every replica: load, database check, breaker states (no secret, not counted by the task limit).
+- **Structured JSON logs** with `service`, `instance_id`, `event` and `request_id`; `X-Request-Id` is forwarded on every outgoing call.
+- **Service Discovery.** Each replica registers after it listens, sends heartbeats, waits out an eviction cooldown and deregisters on `SIGTERM`. Until Service Discovery answers, registration retries with backoff and requests are served normally.
+- **Circuit breaker** per dependency: 3 failures in 17.5 s open it for 17.5 s (`503 DEPENDENCY_UNAVAILABLE` with `Retry-After`), then one trial call.
+- **Replicas: 2 each.**
+  - Monster Raid's live HP stream gets the attacks of every replica through Postgres `LISTEN`/`NOTIFY`.
+  - Package Registry keeps all state in Postgres; its seed runs once, under table locks.
+
+**Show it** (after `docker compose up -d --wait`):
+
+```sh
+docker compose ps monster-raid-service package-registry-service    # two replicas each
+docker compose exec monster-raid-service node -e "fetch('http://127.0.0.1:8087/status').then(r=>r.text()).then(console.log)"
+docker compose logs monster-raid-service | grep '"event":"live.listening"'
+```
+
 ## Lab 2 — Running through the Gateway
 
 Lab 2 puts the Python Gateway in front of every REST call: port **8080** is the
@@ -617,6 +674,29 @@ challenge/decline and selection flows through the Gateway. Full battle
 accept → settlement relies on the convention packages and registrations that
 Package Registry `0.3.1` seeds (`SEED_ON_START=true`); Guild chat tickets
 are served by Guild `0.3.0`.
+
+## Lab 3 — Vica's services with replicas
+
+Guild and Notification `0.4.0` follow the Lab 3 conventions (CPR #55 / #56; both Service Discovery drafts are supported through `DISCOVERY_API`). The details and what was verified are in the [Lab 3 contract notes](docs/lab-3-contract-vica.md).
+
+**What changed:**
+
+- **`GET /status`** on every replica: load, database check, breaker states (no secret, not counted by the task limit).
+- **Structured JSON logs** with `service`, `instance_id`, `event` and `request_id`; `X-Request-Id` is forwarded on every outgoing call.
+- **Service Discovery.** Each replica registers after it listens, sends heartbeats and deregisters on `SIGTERM`. Until Service Discovery answers, registration retries with backoff and requests are served normally.
+- **Circuit breaker** per dependency: 3 failures in 17.5 s open it for 17.5 s (`503 DEPENDENCY_UNAVAILABLE`), then one trial call.
+- **Replicas: 2 each.**
+  - Guild's chat tickets are in the database, and chat events reach every replica through Postgres `LISTEN`/`NOTIFY`, so a message sent to any replica reaches every socket.
+  - Guild publishes `8083-8085:8083`; the gateway still hands out `ws://localhost:8083`.
+  - Notification keeps all state in the database.
+
+**Show it** (after `docker compose up -d --wait`):
+
+```sh
+docker compose ps guild-service notification-service    # two replicas each
+curl -s localhost:8083/status                            # instance_id, load, breakers
+docker compose logs guild-service | grep '"event":"chat.listening"'
+```
 
 ## Lab 2 — Vica's services behind the Gateway
 
@@ -964,6 +1044,7 @@ The common repository stores shared documentation, collaboration files and Git s
 | `services/monster-raid-service` | [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service) | Lab 1 implementation published (image `0.1.2`); linked as submodule |
 | `services/package-registry-service` | [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service) | Lab 1 implementation published (image `0.1.0`); linked as submodule |
 | `services/gateway-service` | [MadalinaDev/gateway-service](https://github.com/MadalinaDev/gateway-service) | Lab 2: repository set up (README, PR template, PR policy, `main`/`dev`); professor and all teammates invited; linked as submodule |
+| `services/service-discovery` | [MadalinaDev/service-discovery](https://github.com/MadalinaDev/service-discovery) | Lab 3: README, PR policy and CI (tests on PRs, image on merge to `main`); professor and all teammates invited; linked as submodule |
 
 Do not add fake submodules or copy private source into public folders. A real submodule needs a remote URL and an existing commit. To add one from the common repo after the service owner has pushed its README:
 
