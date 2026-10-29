@@ -106,7 +106,7 @@ Owners of affected services, please review the sections that concern you: the ga
 
 ## Compose
 
-- **Images.** `nikvnln/tamagotchi-guild-service:0.4.0` and `nikvnln/tamagotchi-notification-service:0.4.0`, published by each repository's CI on merge to `main`.
+- **Images.** `nikvnln/tamagotchi-guild-service:0.4.0` and `nikvnln/tamagotchi-notification-service:0.4.0` (+ `latest`, amd64 and arm64), published by each repository's CI on merge to `main`; tagged `v0.4.0`.
 - **Replicas.** `deploy.replicas: 2` for both. Notification stays `expose:` only; Guild publishes the port range above.
 - **Lab 3 settings.** Both services share the anchor `x-vica-lab3-env`:
   - `DISCOVERY_URL` defaults to `http://service-discovery:8090` and `DISCOVERY_API` to `v55`, which is draft #55.
@@ -139,6 +139,5 @@ Owners of affected services, please review the sections that concern you: the ga
 | Item | Depends on |
 | --- | --- |
 | End-to-end registration, round robin and eviction with the real Service Discovery | The `service-discovery` repository and image, and the choice between #55 and #56 |
-| Publish `0.4.0` + `latest` to Docker Hub | Merging the Lab 3 PRs in `vikanicologlo/guild-service` and `vikanicologlo/notification-service` (#7), then `dev` into `main` |
 | Gateway proxies Guild's WebSocket, so that `8083` is no longer published | Gateway owner |
 | `SKIP LOCKED` claiming of push retries | Real FCM delivery with retries (later lab) |
