@@ -13,6 +13,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
 - [Lab 3 — Scaling up](#lab-3--scaling-up)
+- [Lab 3 — Service Discovery, Gateway, User Management and Map](#lab-3--service-discovery-gateway-user-management-and-map)
 - [Lab 3 — Sabina's services with replicas](#lab-3--sabinas-services-with-replicas)
 - [Lab 2 — Running through the Gateway](#lab-2--running-through-the-gateway)
 - [Lab 3 — Vica's services with replicas](#lab-3--vicas-services-with-replicas)
@@ -585,6 +586,26 @@ still to assign, are in [docs/lab-3-conventions.md](docs/lab-3-conventions.md).
 The Service Discovery repository is the one exception to the private-repo
 rule above: the lab asks to invite the professor and all teammates.
 
+## Lab 3 — Service Discovery, Gateway, User Management and Map
+
+Service Discovery `0.4.0`, the Gateway `0.4.0` and User Management and Map `0.4.0` follow the [Lab 3 conventions](docs/lab-3-conventions.md) (#56). The details and what was verified are in [Mădălina's Lab 3 contract notes](docs/lab-3-contract-madalina.md).
+
+- **Service Discovery** ([MadalinaDev/service-discovery](https://github.com/MadalinaDev/service-discovery), port 8089):
+  - registration with heartbeats, a TTL and Gateway evictions;
+  - `GET /status` polls of every replica every 5 s, with high/critical load and down alerts to Discord or Telegram (`ALERT_*` in `.env`).
+- **Gateway** (gateway-service#10): round-robin over the registered replicas of each service, and a circuit breaker per replica. 3 failures within 17.5 s evict the replica from Service Discovery. Services that do not register yet keep their configured URL.
+- **Replicas.** User Management and Map run as two replicas. Guild, Notification, Monster Raid and Package Registry now register with the merged contract (`DISCOVERY_API=v56`).
+
+Run and look:
+
+```sh
+docker compose up -d --wait
+curl http://localhost:8089/v1/services          # every registered replica, with health and load
+curl http://localhost:8080/status               # the Gateway's routing table and breakers
+docker compose up -d --scale user-management-service=3
+docker compose logs -f gateway-service          # access lines name the replica that answered
+```
+
 ## Lab 3 — Sabina's services with replicas
 
 Monster Raid and Package Registry `0.4.0` follow the Lab 3 conventions (CPR #55 / #56; both Service Discovery drafts are supported through `DISCOVERY_API`). The details and what was verified are in the [Lab 3 contract notes](docs/lab-3-contract-sabina.md).
@@ -1023,6 +1044,7 @@ The common repository stores shared documentation, collaboration files and Git s
 | `services/monster-raid-service` | [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service) | Lab 1 implementation published (image `0.1.2`); linked as submodule |
 | `services/package-registry-service` | [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service) | Lab 1 implementation published (image `0.1.0`); linked as submodule |
 | `services/gateway-service` | [MadalinaDev/gateway-service](https://github.com/MadalinaDev/gateway-service) | Lab 2: repository set up (README, PR template, PR policy, `main`/`dev`); professor and all teammates invited; linked as submodule |
+| `services/service-discovery` | [MadalinaDev/service-discovery](https://github.com/MadalinaDev/service-discovery) | Lab 3: README, PR policy and CI (tests on PRs, image on merge to `main`); professor and all teammates invited; linked as submodule |
 
 Do not add fake submodules or copy private source into public folders. A real submodule needs a remote URL and an existing commit. To add one from the common repo after the service owner has pushed its README:
 
