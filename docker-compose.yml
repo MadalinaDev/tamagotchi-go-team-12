@@ -82,7 +82,7 @@ services:
   service-discovery:
     # Lab 3: registry of the running replicas (conventions section 5). It polls
     # every replica's GET /status and alerts on Discord or Telegram (section 10).
-    image: madalina060504/tamagotchi-service-discovery:0.4.0
+    image: madalina060504/tamagotchi-service-discovery:0.4.1
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     environment:
@@ -155,11 +155,15 @@ services:
         condition: service_healthy
       gateway-service:
         condition: service_started
-    image: ekkusuu/tamagotchi-battle-service:0.3.0
+    image: ekkusuu/tamagotchi-battle-service:0.4.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
+    # Lab 3: timeouts, expiry and preparation are claimed in the
+    # database (FOR UPDATE SKIP LOCKED), so replicas never apply one twice.
+    deploy:
+      replicas: 2
     environment:
-      <<: *service-env
+      <<: [*service-env, *lab3-env]
       AUTH_MODE: gateway
       PORT: "8081"
       DB_NAME: battle_db
@@ -184,11 +188,15 @@ services:
         condition: service_healthy
       gateway-service:
         condition: service_started
-    image: ekkusuu/tamagotchi-tamagotchi-service:0.3.0
+    image: ekkusuu/tamagotchi-tamagotchi-service:0.4.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
+    # Lab 3: reservations and settlement live in the database, so
+    # replicas are interchangeable.
+    deploy:
+      replicas: 2
     environment:
-      <<: *service-env
+      <<: [*service-env, *lab3-env]
       AUTH_MODE: gateway
       PORT: "8082"
       DB_NAME: tamagotchi_db

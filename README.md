@@ -15,6 +15,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Lab 3 — Scaling up](#lab-3--scaling-up)
 - [Lab 3 — Service Discovery, Gateway, User Management and Map](#lab-3--service-discovery-gateway-user-management-and-map)
 - [Lab 3 — Sabina's services with replicas](#lab-3--sabinas-services-with-replicas)
+- [Lab 3 — Sava's services with replicas](#lab-3--savas-services-with-replicas)
 - [Lab 2 — Running through the Gateway](#lab-2--running-through-the-gateway)
 - [Lab 3 — Vica's services with replicas](#lab-3--vicas-services-with-replicas)
 - [Lab 2 — Vica's services behind the Gateway](#lab-2--vicas-services-behind-the-gateway)
@@ -588,7 +589,7 @@ rule above: the lab asks to invite the professor and all teammates.
 
 ## Lab 3 — Service Discovery, Gateway, User Management and Map
 
-Service Discovery `0.4.0`, the Gateway `0.4.0` and User Management and Map `0.4.0` follow the [Lab 3 conventions](docs/lab-3-conventions.md) (#56). The details and what was verified are in [Mădălina's Lab 3 contract notes](docs/lab-3-contract-madalina.md).
+Service Discovery `0.4.1`, the Gateway `0.4.0` and User Management and Map `0.4.0` follow the [Lab 3 conventions](docs/lab-3-conventions.md) (#56). The details and what was verified are in [Mădălina's Lab 3 contract notes](docs/lab-3-contract-madalina.md).
 
 - **Service Discovery** ([MadalinaDev/service-discovery](https://github.com/MadalinaDev/service-discovery), port 8089):
   - registration with heartbeats, a TTL and Gateway evictions;
@@ -626,6 +627,29 @@ Monster Raid and Package Registry `0.4.0` follow the Lab 3 conventions (CPR #55 
 docker compose ps monster-raid-service package-registry-service    # two replicas each
 docker compose exec monster-raid-service node -e "fetch('http://127.0.0.1:8087/status').then(r=>r.text()).then(console.log)"
 docker compose logs monster-raid-service | grep '"event":"live.listening"'
+```
+
+## Lab 3 — Sava's services with replicas
+
+Battle and Tamagotchi `0.4.0` follow the [Lab 3 conventions](docs/lab-3-conventions.md) (#56). The details and what was verified are in [Sava's Lab 3 contract notes](docs/lab-3-contract-sava.md).
+
+**What changed:**
+
+- **`GET /status`** on every replica with the section 4 body: load counters, database check, breaker states. It needs no secret and the task limit does not count it.
+- **Structured JSON logs** with `service`, `instance_id`, `event` and `request_id`; `X-Request-Id` is forwarded on every outgoing call.
+- **Service Discovery.** Each replica registers after it listens (`POST /v1/instances`, Bearer `DISCOVERY_TOKEN`), sends heartbeats, waits out an eviction quarantine and deregisters on `SIGTERM`. Until Service Discovery answers, registration retries with backoff and requests are served normally.
+- **Circuit breaker** per dependency: 3 failures (transport error, timeout or `5xx`) in 17.5 s open it for 17.5 s (`503 DEPENDENCY_UNAVAILABLE`), then one trial call.
+- **Replicas: 2 each.**
+  - Battle's turn timeouts, challenge expiry and preparation are claimed with `FOR UPDATE SKIP LOCKED` and a lease, so only one replica applies each.
+  - Tamagotchi keeps reservations, settlement and idempotency records in Postgres.
+  - Seeding runs under `pg_advisory_xact_lock`, and each replica's pool is capped by `DB_POOL_SIZE` (5).
+
+**Show it** (after `docker compose up -d --wait`):
+
+```sh
+docker compose ps battle-service tamagotchi-service          # two replicas each
+curl -s http://localhost:8089/v1/services/battle/instances   # both registered, health and load
+docker compose exec battle-service wget -qO- http://127.0.0.1:8081/status
 ```
 
 ## Lab 2 — Running through the Gateway

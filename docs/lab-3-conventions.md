@@ -344,8 +344,8 @@ their rows in their Lab 3 PR:
 | Notification | Delivery attempts and retries | Claim retries with `SKIP LOCKED`; keep the deduplication key unique in the database | Vica |
 | User Management | JWT signing key | One key pair for all replicas (rule 4) | Mădălina |
 | Map | SSE `GET /api/v1/map/stream` | Every push reads from the database (or `LISTEN`/`NOTIFY`), not from memory that only one replica filled | Mădălina |
-| Battle | 30 s turn timeout, 120 s challenge expiry, preparation worker | Claim each timeout with a row lock or compare-and-set, so only one replica applies it | Sava |
-| Tamagotchi | Reservations and settlement | Confirm that nothing lives only in memory | Sava |
+| Battle | 30 s turn timeout, 120 s challenge expiry, preparation worker | Claim each timeout with a row lock or compare-and-set, so only one replica applies it (done, Battle 0.4.0: the coordinator claims due battles with `FOR UPDATE SKIP LOCKED` and a lease; seeding runs under `pg_advisory_xact_lock`) | Sava |
+| Tamagotchi | Reservations and settlement | Confirm that nothing lives only in memory (confirmed, Tamagotchi 0.4.0: reservations, settlement and idempotency records are rows; the outbox is claimed with `FOR UPDATE SKIP LOCKED`; seeding runs under `pg_advisory_xact_lock`) | Sava |
 
 ## 10. Health polling and alerts (grades 8–9)
 
