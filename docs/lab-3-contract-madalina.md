@@ -2,9 +2,9 @@
 
 This page describes what Mădălina's parts of Lab 3 implement of the [Lab 3 conventions](lab-3-conventions.md) (#56), how they were verified, and what is still open. It also wires the shared pieces into [docker-compose.yml](../docker-compose.yml).
 
-## Service Discovery `0.4.0` (grades 2, 4, 8, 9, 10)
+## Service Discovery `0.4.1` (grades 2, 4, 8, 9, 10)
 
-Repository [MadalinaDev/service-discovery](https://github.com/MadalinaDev/service-discovery), image `madalina060504/tamagotchi-service-discovery:0.4.0`. It is Python and FastAPI, the team's banned language.
+Repository [MadalinaDev/service-discovery](https://github.com/MadalinaDev/service-discovery), image `madalina060504/tamagotchi-service-discovery:0.4.1`. It is Python and FastAPI, the team's banned language.
 
 - **Repository (grade 2).** Private repository with a README, the CPR's PR template and PR policy, and CI: `ruff` and the tests on every PR, and the image on every merge to `main`. The professor and all teammates are invited. Linked as the `services/service-discovery` submodule.
 - **API (section 5).**
@@ -69,6 +69,8 @@ The whole stack of this compose file ran on 2026-10-29 in a separate Compose pro
 | Unit tests | Service Discovery 44, User Management 52, Map 46; CI green on gateway-service#10, user-management-service#3 and map-service#3 |
 
 Load alerts (grade 8) are covered by Service Discovery's tests (high load logged, critical load notified once, then the recovery, plus the 5-minute repeat). An earlier run of the stack showed them live: 60 concurrent logins against User Management limited to 5 tasks produced `load_critical` and then `load_normal` on every replica.
+
+Service Discovery `0.4.1` (2026-10-30) keeps the alerts of a replica that expires while it is down, so its recovery is still sent when it registers again; `0.4.0` dropped them with the expired entry. On the local stack with the Telegram channel, a replica stopped for longer than the TTL produced the down alert, and starting it again produced the "answering again" recovery.
 
 ## Open items
 

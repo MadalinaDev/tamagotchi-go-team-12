@@ -82,7 +82,7 @@ services:
   service-discovery:
     # Lab 3: registry of the running replicas (conventions section 5). It polls
     # every replica's GET /status and alerts on Discord or Telegram (section 10).
-    image: madalina060504/tamagotchi-service-discovery:0.4.0
+    image: madalina060504/tamagotchi-service-discovery:0.4.1
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     environment:
