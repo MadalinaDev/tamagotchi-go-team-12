@@ -711,7 +711,7 @@ Guild and Notification `0.4.0` follow the Lab 3 conventions (CPR #55 / #56; both
 - **Circuit breaker** per dependency: 3 failures in 17.5 s open it for 17.5 s (`503 DEPENDENCY_UNAVAILABLE`), then one trial call.
 - **Replicas: 2 each.**
   - Guild's chat tickets are in the database, and chat events reach every replica through Postgres `LISTEN`/`NOTIFY`, so a message sent to any replica reaches every socket.
-  - Guild publishes `8083-8085:8083`; the gateway still hands out `ws://localhost:8083`.
+  - Guild replicas have no host port. A small `guild-ws` proxy (`alpine/socat`) publishes `8083` and hands each connection to a Guild replica, so the `ws://localhost:8083` that the gateway hands out always works.
   - Notification keeps all state in the database.
 
 **Show it** (after `docker compose up -d --wait`):

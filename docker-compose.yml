@@ -242,13 +242,26 @@ services:
       SERVICE_TOKEN: ${GUILD_SERVICE_TOKEN}
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
+    # No host port here: replicas cannot share one, and Docker does not say
+    # which replica would get which port of a range. `guild-ws` publishes 8083.
+    expose:
+      - "8083"
+
+  guild-ws:
+    # Fixed entry for the chat WebSocket that the gateway hands out
+    # (GUILD_PUBLIC_WS_URL=ws://localhost:8083). It forwards every TCP
+    # connection to a Guild replica (Docker DNS rotates them), so any replica
+    # can take the socket: tickets are in the database and chat events reach
+    # every replica through LISTEN/NOTIFY. REST on this port still requires
+    # the gateway secret.
+    image: alpine/socat:1.8.1.3
+    command: ["TCP-LISTEN:8083,fork,reuseaddr", "TCP:guild-service:8083"]
+    depends_on:
+      guild-service:
+        condition: service_healthy
     ports:
-      # Published only for the direct chat WebSocket that the gateway hands
-      # out (GUILD_PUBLIC_WS_URL); REST still requires the gateway secret.
-      # A range, so that every replica gets a host port (up to 3 replicas);
-      # the gateway hands out 8083, and the other replicas still deliver
-      # every message to its sockets through LISTEN/NOTIFY.
-      - "8083-8085:8083"
+      - "8083:8083"
+    restart: unless-stopped
 
   notification-service:
     <<: *service
