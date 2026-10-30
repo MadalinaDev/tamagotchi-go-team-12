@@ -701,7 +701,7 @@ are served by Guild `0.3.0`.
 
 ## Lab 3 — Vica's services with replicas
 
-Guild and Notification `0.4.0` follow the Lab 3 conventions (CPR #55 / #56; both Service Discovery drafts are supported through `DISCOVERY_API`). The details and what was verified are in the [Lab 3 contract notes](docs/lab-3-contract-vica.md).
+Guild and Notification `0.4.1` follow the Lab 3 conventions (CPR #55 / #56; both Service Discovery drafts are supported through `DISCOVERY_API`). The details and what was verified are in the [Lab 3 contract notes](docs/lab-3-contract-vica.md).
 
 **What changed:**
 

@@ -221,7 +221,7 @@ services:
         condition: service_healthy
       gateway-service:
         condition: service_started
-    image: nikvnln/tamagotchi-guild-service:0.4.0
+    image: nikvnln/tamagotchi-guild-service:0.4.1
     # Lab 3: chat tickets live in the database and chat events reach every
     # replica through Postgres LISTEN/NOTIFY, so any replica can serve a socket.
     deploy:
@@ -270,7 +270,7 @@ services:
         condition: service_healthy
       gateway-service:
         condition: service_started
-    image: nikvnln/tamagotchi-notification-service:0.4.0
+    image: nikvnln/tamagotchi-notification-service:0.4.1
     # Lab 3: all state is in the database, so replicas are interchangeable.
     deploy:
       replicas: 2
