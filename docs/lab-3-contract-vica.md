@@ -1,6 +1,6 @@
 # Lab 3 implemented contract — Vica
 
-This addendum describes **tamagotchi-guild-service:0.4.0** and **tamagotchi-notification-service:0.4.0**, the Lab 3 versions of Guild and Notification. They implement the "every service" items of the Lab 3 conventions and section 9 for both services. Everything in the [Lab 2 page](lab-2-contract-vica.md) still applies unless this page says otherwise. Two drafts of the conventions are open (CPR #55 and #56), and both services support either one (see [Service Discovery](#service-discovery-both-services)).
+This addendum describes **tamagotchi-guild-service:0.4.1** and **tamagotchi-notification-service:0.4.1**, the Lab 3 versions of Guild and Notification. They implement the "every service" items of the Lab 3 conventions and section 9 for both services. Everything in the [Lab 2 page](lab-2-contract-vica.md) still applies unless this page says otherwise. Two drafts of the conventions are open (CPR #55 and #56), and both services support either one (see [Service Discovery](#service-discovery-both-services)).
 
 Owners of affected services, please review the sections that concern you: the gateway and Service Discovery (registration, `/status`, Guild's WebSocket port), and the compose file (replicas).
 
@@ -15,7 +15,7 @@ Owners of affected services, please review the sections that concern you: the ga
     "status": "ok",
     "service": "guild",
     "instance_id": "guild-c044c34e6d11",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "started_at": "2026-10-29T13:24:33Z",
     "uptime_seconds": 42,
     "load": {"in_flight": 1, "max_concurrent": 50, "utilization": 0.02,
@@ -106,7 +106,8 @@ Owners of affected services, please review the sections that concern you: the ga
 
 ## Compose
 
-- **Images.** `nikvnln/tamagotchi-guild-service:0.4.0` and `nikvnln/tamagotchi-notification-service:0.4.0` (+ `latest`, amd64 and arm64), published by each repository's CI on merge to `main`; tagged `v0.4.0`.
+- **Images.** `nikvnln/tamagotchi-guild-service:0.4.1` and `nikvnln/tamagotchi-notification-service:0.4.1` (+ `latest`, amd64 and arm64), published by each repository's CI on merge to `main`; tagged `v0.4.1`.
+- **0.4.1.** The discovery client opens a new connection for every call. With the real Service Discovery about every other heartbeat failed with `EOF` or `connection reset by peer`: it closes idle connections, a heartbeat can arrive just as it does, and net/http does not retry a `PUT`. On `0.4.1` the compose stack logged no `discovery.heartbeat_failed`, and both replicas of each service stayed `up` with version `0.4.1`.
 - **Replicas.** `deploy.replicas: 2` for both. Both use `expose:` only; port `8083` is published by `guild-ws` (see above), so scaling Guild never conflicts on a host port.
 - **Lab 3 settings.** Both services share the anchor `x-vica-lab3-env`:
   - `DISCOVERY_URL` defaults to `http://service-discovery:8090` and `DISCOVERY_API` to `v55`, which is draft #55.
