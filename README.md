@@ -589,7 +589,7 @@ rule above: the lab asks to invite the professor and all teammates.
 
 ## Lab 3 — Service Discovery, Gateway, User Management and Map
 
-Service Discovery `0.4.0`, the Gateway `0.4.0` and User Management and Map `0.4.0` follow the [Lab 3 conventions](docs/lab-3-conventions.md) (#56). The details and what was verified are in [Mădălina's Lab 3 contract notes](docs/lab-3-contract-madalina.md).
+Service Discovery `0.4.1`, the Gateway `0.4.0` and User Management and Map `0.4.0` follow the [Lab 3 conventions](docs/lab-3-conventions.md) (#56). The details and what was verified are in [Mădălina's Lab 3 contract notes](docs/lab-3-contract-madalina.md).
 
 - **Service Discovery** ([MadalinaDev/service-discovery](https://github.com/MadalinaDev/service-discovery), port 8089):
   - registration with heartbeats, a TTL and Gateway evictions;
