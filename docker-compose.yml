@@ -82,7 +82,9 @@ services:
   service-discovery:
     # Lab 3: registry of the running replicas (conventions section 5). It polls
     # every replica's GET /status and alerts on Discord or Telegram (section 10).
-    image: madalina060504/tamagotchi-service-discovery:0.4.1
+    # 0.5.0 (Lab 4): registrations carry grpc_port and topics; GET /metrics
+    # exports every replica's load and counters for Prometheus.
+    image: madalina060504/tamagotchi-service-discovery:0.5.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     environment:
@@ -99,32 +101,23 @@ services:
       - "8089:8089"
     restart: unless-stopped
 
-  gateway-service:
-    # 0.4.0 (Lab 3): replicas from service-discovery, round-robin, circuit
-    # breaker per replica and eviction (gateway-service#10).
-    image: madalina060504/tamagotchi-gateway-service:0.4.0
+  message-broker:
+    # Lab 4 (docs/lab-4-conventions.md): a queue per service for the gateway's
+    # requests, service-to-service calls over HTTP (/internal/...) and gRPC
+    # (port 50051), durable topic queues with a dead-letter channel in SQLite
+    # (volume broker-data), load-based balancing, a breaker per replica and
+    # rerouting. Thread-per-request. MadalinaDev/message-broker.
+    image: madalina060504/tamagotchi-message-broker:0.5.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     depends_on:
-      postgres:
-        condition: service_healthy
       service-discovery:
         condition: service_started
     environment:
-      PORT: "8080"
-      BATTLE_URL: http://battle-service:8081
-      TAMAGOTCHI_URL: http://tamagotchi-service:8082
-      GUILD_URL: http://guild-service:8083
-      NOTIFICATION_URL: http://notification-service:8084
-      USER_MANAGEMENT_URL: http://user-management-service:8085
-      MAP_URL: http://map-service:8086
-      RAID_URL: http://monster-raid-service:8087
-      REGISTRY_URL: http://package-registry-service:8088
-      GUILD_PUBLIC_WS_URL: ws://localhost:8083
-      AUTH_MODE: jwks
-      JWKS_URL: http://user-management-service:8085/api/v1/auth/jwks
-      JWT_ISSUER: user-management
-      JWT_AUDIENCE: tamagotchi-go
+      PORT: "8090"
+      GRPC_PORT: "50051"
+      GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
+      # The tokens services call each other with (they were the gateway's in Lab 2-3).
       INTERNAL_SERVICE_TOKENS: >-
         battle=${BATTLE_SERVICE_TOKEN:?set BATTLE_SERVICE_TOKEN in .env},
         tamagotchi=${TAMAGOTCHI_SERVICE_TOKEN:?set TAMAGOTCHI_SERVICE_TOKEN in .env},
@@ -134,16 +127,53 @@ services:
         map=${MAP_SERVICE_TOKEN:?set MAP_SERVICE_TOKEN in .env},
         monster-raid=${RAID_SERVICE_TOKEN:?set RAID_SERVICE_TOKEN in .env},
         package-registry=${REGISTRY_SERVICE_TOKEN:?set REGISTRY_SERVICE_TOKEN in .env}
+      # Operator token: replay or delete dead letters, publish by hand. Empty = disabled.
+      BROKER_ADMIN_TOKEN: ${BROKER_ADMIN_TOKEN:-}
+      DISCOVERY_URL: http://service-discovery:8089
+      DISCOVERY_TOKEN: ${DISCOVERY_TOKEN:?set DISCOVERY_TOKEN in .env}
+      LOG_LEVEL: INFO
+    volumes:
+      - broker-data:/data
+    ports:
+      # Published for the demo: GET /v1/topics, /v1/dead-letters, /v1/queues, /metrics.
+      - "8090:8090"
+      - "50051:50051"
+    restart: unless-stopped
+
+  gateway-service:
+    # 0.5.0 (Lab 4): every request goes to the broker queue of its service
+    # (load balancing and breakers moved to the broker); no /internal routes;
+    # GET /metrics; admins download every container's logs from Loki at
+    # GET /api/v1/admin/logs.
+    image: madalina060504/tamagotchi-gateway-service:0.5.0
+    # Published for amd64 only; runs emulated on Apple Silicon.
+    platform: linux/amd64
+    depends_on:
+      postgres:
+        condition: service_healthy
+      service-discovery:
+        condition: service_started
+      message-broker:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      BROKER_URL: http://message-broker:8090
+      LOKI_URL: http://loki:3100
+      GUILD_PUBLIC_WS_URL: ws://localhost:8083
+      AUTH_MODE: jwks
+      # The JWKS comes through the broker's user-management queue too (rerouted around a
+      # frozen replica); the gateway sends X-Gateway-Secret with it.
+      JWKS_URL: http://message-broker:8090/v1/queues/user-management/api/v1/auth/jwks
+      JWT_ISSUER: user-management
+      JWT_AUDIENCE: tamagotchi-go
       GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
       # Interim bridge until User Management emits role claims (seed admin ID).
       GATEWAY_ADMIN_USER_IDS: ${GATEWAY_ADMIN_USER_IDS:-00000000-0000-4000-8000-000000000009}
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
-      # Lab 3: the *_URL values above stay the fallback for a service without
-      # registered replicas. The Gateway registers itself as `gateway`.
+      # Lab 3: the gateway registers itself as `gateway`.
       DISCOVERY_URL: http://service-discovery:8089
       DISCOVERY_TOKEN: ${DISCOVERY_TOKEN:?set DISCOVERY_TOKEN in .env}
-      DISCOVERY_REFRESH_MS: "2000"
       LOG_LEVEL: INFO
     ports:
       - "8080:8080"
@@ -153,8 +183,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      gateway-service:
-        condition: service_started
+      message-broker:
+        condition: service_healthy
     image: ekkusuu/tamagotchi-battle-service:0.4.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
@@ -175,7 +205,8 @@ services:
       SEED_ON_START: "true"
       TASK_TIMEOUT: 5s
       MAX_CONCURRENT_TASKS: "50"
-      GATEWAY_URL: http://gateway-service:8080
+      # Lab 4: calls to other services go through the message broker, same paths and token.
+      GATEWAY_URL: http://message-broker:8090
       GATEWAY_SERVICE_TOKEN: ${BATTLE_SERVICE_TOKEN}
       GATEWAY_SECRET: ${GATEWAY_SECRET}
     expose:
@@ -186,8 +217,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      gateway-service:
-        condition: service_started
+      message-broker:
+        condition: service_healthy
     image: ekkusuu/tamagotchi-tamagotchi-service:0.4.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
@@ -208,7 +239,8 @@ services:
       SEED_ON_START: "true"
       TASK_TIMEOUT: 5s
       MAX_CONCURRENT_TASKS: "50"
-      GATEWAY_URL: http://gateway-service:8080
+      # Lab 4: calls to other services go through the message broker, same paths and token.
+      GATEWAY_URL: http://message-broker:8090
       GATEWAY_SERVICE_TOKEN: ${TAMAGOTCHI_SERVICE_TOKEN}
       GATEWAY_SECRET: ${GATEWAY_SECRET}
     expose:
@@ -219,8 +251,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      gateway-service:
-        condition: service_started
+      message-broker:
+        condition: service_healthy
     image: nikvnln/tamagotchi-guild-service:0.4.1
     # Lab 3: chat tickets live in the database and chat events reach every
     # replica through Postgres LISTEN/NOTIFY, so any replica can serve a socket.
@@ -238,7 +270,8 @@ services:
       GATEWAY_SECRET: ${GATEWAY_SECRET}
       # User Management, Package Registry and Notification through the gateway.
       USE_MOCKS: "false"
-      GATEWAY_URL: http://gateway-service:8080
+      # Lab 4: calls to other services go through the message broker, same paths and token.
+      GATEWAY_URL: http://message-broker:8090
       SERVICE_TOKEN: ${GUILD_SERVICE_TOKEN}
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
@@ -268,8 +301,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      gateway-service:
-        condition: service_started
+      message-broker:
+        condition: service_healthy
     image: nikvnln/tamagotchi-notification-service:0.4.1
     # Lab 3: all state is in the database, so replicas are interchangeable.
     deploy:
@@ -285,7 +318,8 @@ services:
       GATEWAY_SECRET: ${GATEWAY_SECRET}
       # Guild through the gateway.
       USE_MOCKS: "false"
-      GATEWAY_URL: http://gateway-service:8080
+      # Lab 4: calls to other services go through the message broker, same paths and token.
+      GATEWAY_URL: http://message-broker:8090
       SERVICE_TOKEN: ${NOTIFICATION_SERVICE_TOKEN}
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
@@ -297,13 +331,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      gateway-service:
-        condition: service_started
+      message-broker:
+        condition: service_healthy
     # 0.4.0 (Lab 3, docs/lab-3-contract-madalina.md): registers with
     # service-discovery, GET /status, circuit breaker, JSON logs, and one JWT
     # signing key shared by all replicas through user_management_db.
     # The Gateway reads its JWKS directly from this service; everything else comes through the Gateway.
-    image: madalina060504/tamagotchi-user-management-service:0.4.0
+    # 0.5.0 (Lab 4, docs/lab-4-contract-madalina.md): calls Package Registry
+    # with gRPC Broker.Call, serves a gRPC ServiceEndpoint on 9085 and publishes
+    # its outbox on the broker's topics (user.registered, friend.*, enemy.*).
+    image: madalina060504/tamagotchi-user-management-service:0.5.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     deploy:
@@ -319,8 +356,12 @@ services:
       SEED_ON_START: "true"
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
-      GATEWAY_URL: http://gateway-service:8080
+      # Lab 4: calls to other services go through the message broker, same paths and token.
+      GATEWAY_URL: http://message-broker:8090
       GATEWAY_SERVICE_TOKEN: ${USER_MANAGEMENT_SERVICE_TOKEN}
+      BROKER_GRPC_URL: message-broker:50051
+      GRPC_PORT: "9085"
+      EVENT_PUBLISHER: broker
       GATEWAY_SECRET: ${GATEWAY_SECRET}
     expose:
       - "8085"
@@ -330,12 +371,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      gateway-service:
-        condition: service_started
+      message-broker:
+        condition: service_healthy
     # 0.4.0 (Lab 3, docs/lab-3-contract-madalina.md): registers with
     # service-discovery, GET /status, circuit breaker on User Management, JSON
     # logs; SSE stream GET /api/v1/map/stream, task limits.
-    image: madalina060504/tamagotchi-map-service:0.4.0
+    # 0.5.0 (Lab 4, docs/lab-4-contract-madalina.md): calls User Management with
+    # gRPC Broker.Call, serves a gRPC ServiceEndpoint on 9086, publishes users.nearby
+    # and subscribes to friend.removed and enemy.unmarked.
+    image: madalina060504/tamagotchi-map-service:0.5.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     deploy:
@@ -352,8 +396,12 @@ services:
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
       MAP_STREAM_INTERVAL_MS: "5000"
-      GATEWAY_URL: http://gateway-service:8080
+      # Lab 4: calls to other services go through the message broker, same paths and token.
+      GATEWAY_URL: http://message-broker:8090
       GATEWAY_SERVICE_TOKEN: ${MAP_SERVICE_TOKEN}
+      BROKER_GRPC_URL: message-broker:50051
+      GRPC_PORT: "9086"
+      EVENT_PUBLISHER: broker
       GATEWAY_SECRET: ${GATEWAY_SECRET}
     expose:
       - "8086"
@@ -376,9 +424,10 @@ services:
       # Lab 2 task limits: 504 TASK_TIMEOUT, 503 TOO_MANY_CONCURRENT_TASKS.
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
-      # Calls to other services go only through the gateway, with SERVICE_TOKEN
+      # Calls to other services go through the broker (Lab 4), with SERVICE_TOKEN
       # (mapped to this service's X-Service-Name).
-      GATEWAY_URL: http://gateway-service:8080
+      # Lab 4: calls to other services go through the message broker, same paths and token.
+      GATEWAY_URL: http://message-broker:8090
       SERVICE_TOKEN: ${RAID_SERVICE_TOKEN}
       # Guild, Tamagotchi, Package Registry and User Management are all real.
       USE_MOCKS: "false"
@@ -406,9 +455,10 @@ services:
       # Lab 2 task limits: 504 TASK_TIMEOUT, 503 TOO_MANY_CONCURRENT_TASKS.
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
-      # Calls to other services go only through the gateway, with SERVICE_TOKEN
+      # Calls to other services go through the broker (Lab 4), with SERVICE_TOKEN
       # (mapped to this service's X-Service-Name).
-      GATEWAY_URL: http://gateway-service:8080
+      # Lab 4: calls to other services go through the message broker, same paths and token.
+      GATEWAY_URL: http://message-broker:8090
       SERVICE_TOKEN: ${REGISTRY_SERVICE_TOKEN}
       USE_MOCKS: "false"
       # Same secret as the gateway: requests without X-Gateway-Secret get 401.
@@ -419,5 +469,66 @@ services:
     expose:
       - "8088"
 
+  # Lab 4, grade 10: Prometheus scrapes the broker, the gateway and Service
+  # Discovery (which exports every replica's load from its /status polls);
+  # Alloy ships every container's stdout to Loki; Grafana shows both.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=2d
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.3.2
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.5.1
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    environment:
+      COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:-tamagotchi-go}
+    volumes:
+      - ./monitoring/config.alloy:/etc/alloy/config.alloy:ro
+      # Where Alloy remembers how far it read each container's logs, so a
+      # recreated Alloy does not send them all again.
+      - alloy-data:/var/lib/alloy/data
+      # Reads the containers' logs through the Docker API (Docker Desktop too).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # The demo dashboard is readable without logging in.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/tamagotchi-go.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  broker-data:
+  alloy-data:

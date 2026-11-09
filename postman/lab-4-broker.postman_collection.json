@@ -1,0 +1,808 @@
+{
+  "info": {
+    "name": "Lab 4 — Message broker",
+    "description": "Lab 4 grade by grade (docs/lab-4-conventions.md). Start the stack (docker compose up -d --wait), then set broker_admin_token to BROKER_ADMIN_TOKEN and map_service_token to MAP_SERVICE_TOKEN from .env (newman: --env-var broker_admin_token=... --env-var map_service_token=...).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Setup",
+      "description": "Logs in the seed admin and Alice through the gateway (and so through the broker).",
+      "item": [
+        {
+          "name": "Log in the admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('admin_token', pm.response.json().access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Log in Alice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{alice_email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('alice_token', pm.response.json().access_token);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Grade 4 · download the system's logs",
+      "description": "GET /api/v1/admin/logs on the gateway: every container's logs from Loki, as a file. Admins only.",
+      "item": [
+        {
+          "name": "Download the last 15 minutes (admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/admin/logs?since=15m&limit=200"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 with a file to download', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.headers.get('Content-Disposition')).to.match(/^attachment; filename=\"tamagotchi-logs-.+\\.ndjson\"$/);",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/x-ndjson');",
+                  "});",
+                  "pm.test('X-Log-Lines counts the lines', () => pm.expect(Number(pm.response.headers.get('X-Log-Lines'))).to.be.at.least(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Only the broker's warnings, as text",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/admin/logs?since=1h&service=message-broker&level=warn&format=text"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 text', () => { pm.response.to.have.status(200); pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A player may not download logs -> 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/admin/logs"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 FORBIDDEN', () => { pm.response.to.have.status(403); pm.expect(pm.response.json().code).to.eql('FORBIDDEN'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Grade 5 · the broker routes every call",
+      "description": "User requests (gateway -> broker queue) and service-to-service calls (service token -> broker) reach a replica the broker picked.",
+      "item": [
+        {
+          "name": "A user request goes through the broker",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/users/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('the broker names the replica and the attempts', () => {",
+                  "  pm.expect(pm.response.headers.get('X-Upstream-Instance')).to.match(/^user-management-/);",
+                  "  pm.expect(Number(pm.response.headers.get('X-Broker-Attempts'))).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "A service calls another through the broker (Map's token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{map_service_token}}"
+              }
+            ],
+            "url": "{{broker_url}}/internal/v1/users/00000000-0000-4000-8000-000000000001/relationships"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 from a User Management replica', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.headers.get('X-Upstream-Instance')).to.match(/^user-management-/);",
+                  "  pm.expect(pm.response.json().friend_ids).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Without a service token -> 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{broker_url}}/internal/v1/users/00000000-0000-4000-8000-000000000001/relationships"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The queues and their replicas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{broker_url}}/v1/queues"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const queues = pm.response.json().queues;",
+                  "pm.test('every service has a queue with replicas', () => {",
+                  "  for (const s of ['user-management', 'map', 'battle', 'tamagotchi', 'guild', 'notification', 'monster-raid', 'package-registry']) {",
+                  "    pm.expect(queues[s], s).to.be.an('object');",
+                  "    pm.expect(queues[s].replicas.length, s).to.be.at.least(1);",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Grade 6 · subscriber queues and topics",
+      "description": "Replicas register the topics they subscribe to; the broker delivers every event to one replica of every subscriber.",
+      "item": [
+        {
+          "name": "Registrations carry grpc_port and topics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{discovery_url}}/v1/services/map/instances"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const map = pm.response.json().instances;",
+                  "pm.test('Map subscribes to friend.removed and enemy.unmarked', () => {",
+                  "  pm.expect(map.length).to.be.at.least(1);",
+                  "  map.forEach(i => { pm.expect(i.grpc_port).to.eql(9086); pm.expect(i.topics).to.include.members(['friend.removed', 'enemy.unmarked']); });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Publish an event nobody listens to (admin token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{broker_admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{broker_url}}/v1/topics/lab4.demo/events",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"Lab4Demo\",\n  \"payload\": {\n    \"hello\": \"world\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 stored', () => { pm.response.to.have.status(202); pm.expect(pm.response.json().subscribers).to.eql([]); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Grade 7 · thread-per-request and the topic list",
+      "description": "Every request to the broker runs on a thread of its own; GET /v1/topics lists the topics.",
+      "item": [
+        {
+          "name": "Broker /status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{broker_url}}/status"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('message-broker, thread-per-request', () => {",
+                  "  pm.expect(body.service).to.eql('message-broker');",
+                  "  pm.expect(body.threads.model).to.eql('thread-per-request');",
+                  "  pm.expect(body.threads.active).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List the topics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{broker_url}}/v1/topics"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const topics = pm.response.json().topics;",
+                  "const byName = Object.fromEntries(topics.map(t => [t.name, t]));",
+                  "pm.test('lab4.demo was published', () => pm.expect(byName['lab4.demo'].published).to.be.at.least(1));",
+                  "pm.test('Map subscribes to friend.removed', () => pm.expect(byName['friend.removed'].subscribers).to.include('map'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Grade 8 · gRPC and no service routes in the gateway",
+      "description": "Map calls User Management with gRPC Broker.Call; the broker reaches User Management over gRPC Handle. The gateway serves no /internal route.",
+      "item": [
+        {
+          "name": "/internal through the gateway -> 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/internal/v1/users/00000000-0000-4000-8000-000000000001"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 ROUTE_NOT_FOUND', () => { pm.response.to.have.status(404); pm.expect(pm.response.json().code).to.eql('ROUTE_NOT_FOUND'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Map's nearby users (Map -> gRPC -> User Management)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/map/users"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The broker counted gRPC calls",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{broker_url}}/metrics"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const lines = pm.response.text().split('\\n').filter(l => l.startsWith('broker_requests_total{') && l.includes('entry=\"grpc\"'));",
+                  "const total = lines.reduce((sum, l) => sum + Number(l.split(' ').pop()), 0);",
+                  "pm.test('gRPC Broker.Call requests were served', () => pm.expect(total).to.be.above(0));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Grade 9 · durable queues and the dead-letter channel",
+      "description": "A malformed friend.removed is refused by Map (INVALID_ARGUMENT) and lands in the dead-letter channel; it can be listed, replayed and deleted.",
+      "item": [
+        {
+          "name": "Publish a malformed friend.removed (admin token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{broker_admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{broker_url}}/v1/topics/friend.removed/events",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"FriendshipRemoved\",\n  \"payload\": {\n    \"friendship_id\": \"postman\",\n    \"user_ids\": [\n      \"not-a-uuid\"\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202, queued for Map', () => { pm.response.to.have.status(202); pm.expect(pm.response.json().subscribers).to.include('map'); });",
+                  "pm.collectionVariables.set('event_id', pm.response.json().event_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The dead-letter channel lists it",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{broker_url}}/v1/dead-letters?topic=friend.removed"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "setTimeout(() => {}, 3000); // give the broker time to deliver"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const letter = pm.response.json().dead_letters.find(l => l.event_id === pm.collectionVariables.get('event_id'));",
+                  "pm.test('rejected by Map', () => {",
+                  "  pm.expect(letter, 'dead letter').to.be.an('object');",
+                  "  pm.expect(letter.subscriber).to.eql('map');",
+                  "  pm.expect(letter.reason).to.eql('rejected');",
+                  "  pm.expect(letter.last_error).to.include('INVALID_ARGUMENT');",
+                  "});",
+                  "if (letter) pm.collectionVariables.set('dead_letter_id', letter.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replay without the admin token -> 401",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{broker_url}}/v1/dead-letters/{{dead_letter_id}}/replay"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replay it (admin token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{broker_admin_token}}"
+              }
+            ],
+            "url": "{{broker_url}}/v1/dead-letters/{{dead_letter_id}}/replay"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202, back in its queue', () => { pm.response.to.have.status(202); pm.expect(pm.response.json().status).to.eql('pending'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Still malformed: dead again",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{broker_url}}/v1/dead-letters?topic=friend.removed"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "setTimeout(() => {}, 3000); // give the broker time to deliver"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const letter = pm.response.json().dead_letters.find(l => l.id === Number(pm.collectionVariables.get('dead_letter_id')));",
+                  "pm.test('rejected again after the replay', () => pm.expect(letter && letter.reason).to.eql('rejected'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete it (admin token)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{broker_admin_token}}"
+              }
+            ],
+            "url": "{{broker_url}}/v1/dead-letters/{{dead_letter_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Grade 10 · load-based routing, high availability, monitoring",
+      "description": "The broker routes by load and reroutes failed attempts (pause a replica in Docker Desktop to see X-Broker-Attempts: 2); Prometheus, Loki and Grafana monitor the system.",
+      "item": [
+        {
+          "name": "Replica load the broker routes by",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{broker_url}}/v1/queues"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const replicas = Object.values(pm.response.json().queues).flatMap(q => q.replicas);",
+                  "pm.test('every replica has a load, in-flight count and breaker state', () => replicas.forEach(r => {",
+                  "  pm.expect(r).to.have.property('load');",
+                  "  pm.expect(r.in_flight).to.be.a('number');",
+                  "  pm.expect(['closed', 'half_open', 'open']).to.include(r.breaker);",
+                  "}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Service Discovery /metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{discovery_url}}/metrics"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('replica load exported', () => pm.expect(pm.response.text()).to.include('discovery_replica_load{'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Gateway /metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gateway_url}}/metrics"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('requests counted', () => pm.expect(pm.response.text()).to.include('gateway_requests_total{'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Prometheus: replicas up",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{prometheus_url}}/api/v1/query?query=sum(discovery_replica_up)"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Prometheus answers with the replicas', () => {",
+                  "  const result = pm.response.json().data.result;",
+                  "  pm.expect(result.length).to.eql(1);",
+                  "  pm.expect(Number(result[0].value[1])).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Grafana is up with the dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{grafana_url}}/api/search?query=Tamagotchi%20Go"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('the provisioned dashboard', () => pm.expect(pm.response.json().map(d => d.title)).to.include('Tamagotchi Go: services, broker and logs'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "gateway_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "broker_url",
+      "value": "http://localhost:8090"
+    },
+    {
+      "key": "discovery_url",
+      "value": "http://localhost:8089"
+    },
+    {
+      "key": "prometheus_url",
+      "value": "http://localhost:9090"
+    },
+    {
+      "key": "grafana_url",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "admin_email",
+      "value": "admin@example.com"
+    },
+    {
+      "key": "alice_email",
+      "value": "alice@example.com"
+    },
+    {
+      "key": "password",
+      "value": "password123"
+    },
+    {
+      "key": "broker_admin_token",
+      "value": ""
+    },
+    {
+      "key": "map_service_token",
+      "value": ""
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "alice_token",
+      "value": ""
+    },
+    {
+      "key": "event_id",
+      "value": ""
+    },
+    {
+      "key": "dead_letter_id",
+      "value": ""
+    }
+  ]
+}

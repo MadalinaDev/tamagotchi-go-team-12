@@ -28,3 +28,6 @@
 [submodule "services/service-discovery"]
 	path = services/service-discovery
 	url = https://github.com/MadalinaDev/service-discovery.git
+[submodule "services/message-broker"]
+	path = services/message-broker
+	url = https://github.com/MadalinaDev/message-broker.git

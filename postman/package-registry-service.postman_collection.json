@@ -6,6 +6,12 @@
   },
   "variable": [
     {
+      "key": "broker_url",
+      "value": "http://localhost:8090",
+      "type": "string",
+      "description": "Lab 4: the message broker; services call each other through it (/internal/...), no longer through the gateway."
+    },
+    {
       "key": "base_url",
       "value": "http://localhost:8080"
     },
@@ -1031,7 +1037,7 @@
                 "value": "Bearer {{service_token}}"
               }
             ],
-            "url": "{{base_url}}/internal/v1/users/{{bob_id}}/package-registrations"
+            "url": "{{broker_url}}/internal/v1/users/{{bob_id}}/package-registrations"
           }
         },
         {
@@ -1056,7 +1062,7 @@
                 "value": "Bearer {{service_token}}"
               }
             ],
-            "url": "{{base_url}}/internal/v1/packages/{{package_id}}/care-definitions/1"
+            "url": "{{broker_url}}/internal/v1/packages/{{package_id}}/care-definitions/1"
           }
         },
         {
@@ -1081,7 +1087,7 @@
                 "value": "Bearer {{service_token}}"
               }
             ],
-            "url": "{{base_url}}/internal/v1/packages/{{package_id}}"
+            "url": "{{broker_url}}/internal/v1/packages/{{package_id}}"
           }
         },
         {
@@ -1106,7 +1112,7 @@
                 "value": "Bearer {{service_token}}"
               }
             ],
-            "url": "{{base_url}}/internal/v1/raid-definitions/{{definition_id}}/versions/2"
+            "url": "{{broker_url}}/internal/v1/raid-definitions/{{definition_id}}/versions/2"
           }
         },
         {
@@ -1127,7 +1133,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{base_url}}/internal/v1/packages/{{package_id}}"
+            "url": "{{broker_url}}/internal/v1/packages/{{package_id}}"
           }
         }
       ]

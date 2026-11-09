@@ -6,6 +6,12 @@
   },
   "variable": [
     {
+      "key": "broker_url",
+      "value": "http://localhost:8090",
+      "type": "string",
+      "description": "Lab 4: the message broker; services call each other through it (/internal/...), no longer through the gateway."
+    },
+    {
       "key": "base_url",
       "value": "http://localhost:8080"
     },
@@ -134,7 +140,7 @@
                 "value": "Bearer {{service_token}}"
               }
             ],
-            "url": "{{base_url}}/internal/v1/dev/raid-events",
+            "url": "{{broker_url}}/internal/v1/dev/raid-events",
             "description": "Temporary Lab 1 endpoint (no RabbitMQ): creates exactly one raid per schedule_id.",
             "body": {
               "mode": "raw",
@@ -174,7 +180,7 @@
                 "value": "Bearer {{service_token}}"
               }
             ],
-            "url": "{{base_url}}/internal/v1/dev/raid-events",
+            "url": "{{broker_url}}/internal/v1/dev/raid-events",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"event_id\": \"{{$guid}}\",\n  \"type\": \"RaidActivationRequested\",\n  \"version\": 1,\n  \"producer\": \"package-registry\",\n  \"occurred_at\": \"{{now}}\",\n  \"correlation_id\": \"{{schedule_id}}\",\n  \"payload\": {\n    \"schedule_id\": \"{{schedule_id}}\",\n    \"revision\": 1,\n    \"definition_id\": \"{{definition_id}}\",\n    \"definition_version\": 1,\n    \"guild_id\": \"{{guild_id}}\",\n    \"starts_at\": \"{{now}}\"\n  }\n}",
@@ -674,7 +680,7 @@
                 "value": "Bearer {{service_token}}"
               }
             ],
-            "url": "{{base_url}}/internal/v1/raids/by-schedule/{{schedule_id}}"
+            "url": "{{broker_url}}/internal/v1/raids/by-schedule/{{schedule_id}}"
           }
         },
         {
@@ -700,7 +706,7 @@
                 "value": "Bearer {{service_token}}"
               }
             ],
-            "url": "{{base_url}}/internal/v1/raids/by-schedule/11111111-1111-4111-8111-111111111111"
+            "url": "{{broker_url}}/internal/v1/raids/by-schedule/11111111-1111-4111-8111-111111111111"
           }
         },
         {
@@ -721,7 +727,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{base_url}}/internal/v1/raids/by-schedule/{{schedule_id}}"
+            "url": "{{broker_url}}/internal/v1/raids/by-schedule/{{schedule_id}}"
           }
         }
       ]
@@ -757,7 +763,7 @@
                 "value": "Bearer {{service_token}}"
               }
             ],
-            "url": "{{base_url}}/internal/v1/dev/raid-events",
+            "url": "{{broker_url}}/internal/v1/dev/raid-events",
             "description": "Activation two hours after starts_at (Big Slime lasts 3600 s): the raid is created directly as failed, so its event stream ends right after the snapshot.",
             "body": {
               "mode": "raw",

@@ -1,7 +1,7 @@
 name: Lab 1 smoke
 on:
   pull_request:
-    paths: ['docker-compose.yml', 'db/**', 'postman/**', '.env.example', '.github/workflows/lab1-smoke.yml', '.github/smoke/**']
+    paths: ['docker-compose.yml', 'db/**', 'postman/**', 'monitoring/**', '.env.example', '.github/workflows/lab1-smoke.yml', '.github/smoke/**']
   workflow_dispatch:
 permissions:
   contents: read
@@ -28,6 +28,7 @@ jobs:
       RAID_SERVICE_TOKEN: ci_tok_raid_${{ github.run_id }}
       REGISTRY_SERVICE_TOKEN: ci_tok_registry_${{ github.run_id }}
       DISCOVERY_TOKEN: ci_tok_discovery_${{ github.run_id }}
+      BROKER_ADMIN_TOKEN: ci_broker_admin_${{ github.run_id }}
       COMPOSE_PROJECT_NAME: pad-lab1-ci
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +41,7 @@ jobs:
       - run: npx --yes newman@6.2.1 run postman/tamagotchi-service.postman_collection.json --bail
       - run: npx --yes newman@6.2.1 run postman/guild-service.postman_collection.json -e postman/local.postman_environment.json --bail --env-var "service_token=$GUILD_SERVICE_TOKEN"
       - run: npx --yes newman@6.2.1 run postman/notification-service.postman_collection.json -e postman/local.postman_environment.json --bail --env-var "service_token=$NOTIFICATION_SERVICE_TOKEN"
-      # Internal requests use the same service tokens the gateway is started with.
+      # Internal requests go to the message broker with the service tokens it is started with.
       - run: npx --yes newman@6.2.1 run postman/user-management-service.postman_collection.json --bail --env-var "map_service_token=$MAP_SERVICE_TOKEN" --env-var "battle_service_token=$BATTLE_SERVICE_TOKEN"
       - run: npx --yes newman@6.2.1 run postman/map-service.postman_collection.json --bail
       # Since Lab 2, Monster Raid and Package Registry are reachable only through
@@ -60,5 +61,7 @@ jobs:
             echo "::notice::gateway-service is not in docker-compose.yml yet; checking Monster Raid and Package Registry inside the compose network instead of running their gateway collections."
             docker compose exec -T monster-raid-service node - < .github/smoke/sabina-services-probe.js
           fi
+      # Lab 4: logs download, broker queues, topics, gRPC, dead letters, monitoring.
+      - run: npx --yes newman@6.2.1 run postman/lab-4-broker.postman_collection.json --bail --env-var "broker_admin_token=$BROKER_ADMIN_TOKEN" --env-var "map_service_token=$MAP_SERVICE_TOKEN"
       - if: always()
         run: docker compose logs && docker compose down -v

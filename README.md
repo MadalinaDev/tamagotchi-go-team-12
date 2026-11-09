@@ -2,7 +2,7 @@
 
 Lab 0 plans a microservice backend where independently developed pet-care apps share users, creatures, battles, guilds and raids. Each app (a **package**) can define its own care statistics; global services provide interoperability without forcing all packages to use the same hunger/happiness model.
 
-**Status:** architecture and communication-contract proposal for implementation in later labs. The service allocation and technology split below are confirmed; the concrete gameplay constants and API design are the initial baseline for team review. **Lab 1:** all eight services are implemented, published on Docker Hub and started together by [docker-compose.yml](docker-compose.yml). See [Lab 1 — Running the whole system](#lab-1--running-the-whole-system) for the images, requirements, run steps and contract updates.
+**Status:** architecture and communication-contract proposal for implementation in later labs. The service allocation and technology split below are confirmed; the concrete gameplay constants and API design are the initial baseline for team review. **Lab 1:** all eight services are implemented, published on Docker Hub and started together by [docker-compose.yml](docker-compose.yml). See [Lab 1 — Running the whole system](#lab-1--running-the-whole-system) for the images, requirements, run steps and contract updates. **Lab 4:** a message broker now sits between the gateway and the services and between the services themselves; see [Lab 4 — Message broker](#lab-4--message-broker) and the [architecture](#architecture).
 
 ## Contents
 
@@ -12,6 +12,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Communication contract](#communication-contract)
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
+- [Lab 4 — Message broker](#lab-4--message-broker)
 - [Lab 3 — Scaling up](#lab-3--scaling-up)
 - [Lab 3 — Service Discovery, Gateway, User Management and Map](#lab-3--service-discovery-gateway-user-management-and-map)
 - [Lab 3 — Sabina's services with replicas](#lab-3--sabinas-services-with-replicas)
@@ -44,93 +45,96 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 
 ## Architecture
 
-Since Lab 2 the **API Gateway** is the single entry point. Clients reach the system only through it, and services also call each other through it. The one exception is Guild's chat WebSocket: the gateway negotiates it, and the client then connects to Guild directly.
+Since Lab 4 the **API Gateway** is still the single entry point for clients, but it no longer calls the services itself: it hands every request to the **Message Broker**, naming the service that owns the path. The broker queues it for that service, picks the least-loaded replica and reroutes failed attempts. Services call each other through the broker too (HTTP on the `/internal/...` paths or gRPC `Broker.Call`), and fire events on **topics** without knowing who listens. Every replica registers with **Service Discovery** (its gRPC port and the topics it subscribes to), which the broker reads. Guild's chat WebSocket remains the one direct connection.
 
 ```mermaid
 flowchart LR
     C["Clients<br/>package apps, Postman"]
-    GW["API Gateway<br/>Python · :8080<br/>JWT check via JWKS<br/>routing · 5 s timeout<br/>50 concurrent tasks"]
-    WS["Guild chat WebSocket<br/>:8083 · Guild's only<br/>public port"]
+    GW["API Gateway · Python · :8080<br/>JWT check via JWKS · 5 s timeout<br/>50 concurrent tasks · no /internal routes<br/>admin log download"]
+    MB["Message Broker · Python<br/>:8090 HTTP · :50051 gRPC · thread per request<br/>queue per service · topics<br/>least-loaded routing · breaker per replica<br/>durable queues + dead letters (SQLite)"]
+    SD["Service Discovery · Python · :8089<br/>registry (grpc_port, topics)<br/>/status polls · alerts → Telegram/Discord"]
+    WS["Guild chat WebSocket<br/>:8083 · direct"]
 
-    subgraph SVC["Services · Docker network only (expose:)"]
-        GOS["Go<br/>Battle :8081<br/>Tamagotchi :8082<br/>Guild :8083<br/>Notification :8084"]
-        NEST["NestJS + Prisma<br/>User Management :8085<br/>Map :8086<br/>Monster Raid :8087<br/>Package Registry :8088"]
+    subgraph SVC["Services · 2 replicas each · Docker network only"]
+        GOS["Go<br/>Battle :8081 · Tamagotchi :8082<br/>Guild :8083 · Notification :8084"]
+        NEST["NestJS + Prisma<br/>User Management :8085 (gRPC :9085)<br/>Map :8086 (gRPC :9086)<br/>Monster Raid :8087 · Package Registry :8088"]
     end
 
-    DB[("PostgreSQL + PostGIS<br/>one database<br/>per service")]
-    F["Firebase Cloud Messaging<br/>push to client devices"]
-    Q[("RabbitMQ<br/>later lab")]
+    DB[("PostgreSQL + PostGIS<br/>one database per service")]
+    MON["Monitoring<br/>Prometheus :9090 · Loki :3100<br/>Alloy (container logs) · Grafana :3000"]
+    F["Firebase Cloud Messaging"]
 
-    C -->|"① REST + Bearer JWT<br/>only published REST port"| GW
-    GW <-->|"② user calls: X-Auth-User-Id,<br/>X-Auth-Roles, X-Gateway-Secret<br/>(JWT not forwarded)<br/>③ service-to-service:<br/>/internal/v1/* + service token,<br/>always through the gateway"| SVC
-    C <==>|"④ chat socket, URL<br/>negotiated by the gateway"| WS
+    C -->|"① REST + Bearer JWT"| GW
+    GW -->|"② queue of the service<br/>/v1/queues/{service}/…<br/>X-Auth-*, X-Gateway-Secret"| MB
+    MB -->|"③ least-loaded replica<br/>HTTP · gRPC ServiceEndpoint"| SVC
+    SVC -->|"④ calls: gRPC Broker.Call or<br/>HTTP /internal/… + service token<br/>⑤ events: Publish(topic)"| MB
+    MB -.->|"replicas, topics · evictions"| SD
+    SVC -.->|"register, heartbeat · /status polled"| SD
+    C <==>|"⑥ chat socket, URL<br/>negotiated by the gateway"| WS
     SVC --- DB
-    SVC -->|"⑤ Notification push"| F
-    SVC -.->|"domain events<br/>today /internal/v1/dev/*<br/>through the gateway"| Q
+    SVC -->|"Notification push"| F
+    MON -.->|"scrape /metrics · collect logs"| MB
+    MON -.-> SD
+    GW -.->|"log download"| MON
 ```
 
-**Request flow and WebSocket negotiation:**
+**Request flow, a service-to-service call over gRPC, and a topic event:**
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant C as Client
     participant GW as Gateway :8080
-    participant UM as User Management
-    participant G as Guild :8083
-    participant N as Notification
+    participant MB as Message Broker
+    participant M as Map replica
+    participant UM as User Management replica
 
-    C->>GW: POST /api/v1/auth/login (anonymous route)
-    GW->>UM: forward
-    UM-->>GW: access_token (RS256 JWT)
-    GW-->>C: access_token
-    C->>GW: POST /api/v1/guilds/{id}/invites + Bearer JWT
-    GW->>GW: validate JWT (JWKS, iss, aud, exp), drop Authorization
-    GW->>G: X-Auth-User-Id, X-Auth-Roles, X-Gateway-Secret
-    G->>GW: GET /internal/v1/users/{id}/relationships + Bearer guild token
-    GW->>UM: X-Service-Name: guild
-    UM-->>GW: friend_ids
-    GW-->>G: friend_ids
-    G->>GW: POST /internal/v1/dev/events (GuildInvited) + guild token
-    GW->>N: X-Service-Name: guild
-    N-->>GW: 200 (inbox entry for the invitee)
-    GW-->>G: 200
-    G-->>GW: 201 GuildInvite
-    GW-->>C: 201 GuildInvite
-    C->>GW: POST /api/v1/guilds/{id}/chat-tickets + JWT
-    GW->>G: X-Auth-User-Id, X-Gateway-Secret
-    G-->>GW: 201 {ticket} (single-use, 30 s)
-    GW-->>C: 201 {ticket}
-    C->>GW: GET /api/v1/guilds/{id}/ws?ticket=...
-    GW-->>C: 200 {ws_url: ws://localhost:8083/...} (not proxied)
-    C->>G: WebSocket upgrade (direct, ticket checked)
-    G-->>C: 101, then chat.ack / chat.message frames
+    C->>GW: GET /api/v1/map/users + Bearer JWT
+    GW->>GW: validate JWT (JWKS), drop Authorization
+    GW->>MB: GET /v1/queues/map/api/v1/map/users<br/>X-Auth-User-Id, X-Gateway-Secret
+    MB->>MB: queue of map · least-loaded replica · breaker closed
+    MB->>M: GET /api/v1/map/users
+    M->>MB: gRPC Broker.Call(user-management, GET /internal/v1/users/{id}/relationships) + service token
+    MB->>UM: gRPC ServiceEndpoint.Handle · X-Service-Name: map
+    UM-->>MB: 200 friend_ids, enemy_ids
+    MB-->>M: CallReply 200
+    M-->>MB: 200 users
+    MB-->>GW: 200 + X-Upstream-Instance
+    GW-->>C: 200
+    Note over UM,MB: later, a friendship is removed
+    UM->>MB: gRPC Publish(friend.removed) from its outbox
+    MB->>MB: store durably for every subscriber (Map)
+    MB->>M: gRPC ServiceEndpoint.Deliver (one Map replica)
+    M-->>MB: OK, pair re-armed (or INVALID_ARGUMENT: dead-letter channel)
 ```
 
 - **Databases:** every service has its **own PostgreSQL database and credentials** on one local Postgres server (PostGIS for Map). Tables and credentials stay isolated; services never read another service's database.
-- **Not drawn as separate arrows:** the gateway reads User Management's JWKS to verify tokens, and Monster Raid's live HP (SSE) is streamed through the gateway like any other response.
-- **Ports:** only the gateway's 8080 is published for REST, plus Guild's 8083 for the direct WebSocket. All other service ports are `expose:` only.
+- **Not drawn as separate arrows:** the gateway reads User Management's JWKS to verify tokens (through the broker's `user-management` queue), and Monster Raid's live HP (SSE) is streamed through the gateway and the broker like any other response.
+- **Ports:** only the gateway's 8080 is published for REST, plus Guild's 8083 for the direct WebSocket. All other service ports are `expose:` only. For the demo, the broker (8090), Service Discovery (8089), Prometheus (9090), Loki (3100) and Grafana (3000) are published too.
 - **Header trust:**
   - The gateway strips every client-supplied `Authorization`, `X-Auth-*`, `X-Service-*` and `X-Gateway-*` header, and injects its own plus `X-Gateway-Secret`.
   - Services trust identity headers only next to that secret, so a forged `X-Auth-User-Id` sent straight to Guild's public port is rejected.
 - **Task controls:** the gateway and every service bound each task to 5 s (`504 TASK_TIMEOUT`) and 50 concurrent tasks (`503 TOO_MANY_CONCURRENT_TASKS`, `Retry-After`).
 
-| Caller / producer | Receiver | Purpose | How (Lab 2) |
+Since Lab 4 every service-to-service call goes through the message broker (HTTP on the same `/internal/...` paths, or gRPC `Broker.Call`), and events become topics as their owners adopt them ([Lab 4 conventions](docs/lab-4-conventions.md), section 6.6).
+
+| Caller / producer | Receiver | Purpose | How (Lab 4) |
 | --- | --- | --- | --- |
-| Clients | All public service APIs | REST commands and queries; user JWT | Through the gateway |
+| Clients | All public service APIs | REST commands and queries; user JWT | Gateway → the broker queue of the service |
 | Clients | Guild | WebSocket chat; REST history and tickets | Ticket and negotiation through the gateway, socket direct |
-| Clients | Monster Raid | Live raid HP (SSE) | Streamed through the gateway |
-| Map | User Management | Filter friends/enemies and unrelated proximity candidates | Through the gateway |
-| User Management | Package Registry | Verify local-wallet registration and pinned raid reward rules | Through the gateway |
-| Package Registry | User Management, Guild | Validate developer identity and scheduled raid target guild | Through the gateway |
-| Notification | Guild | Resolve the recipient set for raid-start notifications | Through the gateway |
-| Guild | User Management, Package Registry | Verify invitee identity, accepted friendship and shared package | Through the gateway |
-| Guild | Notification | `GuildInvited` | Through the gateway to `/internal/v1/dev/events` (stands in for RabbitMQ) |
-| Tamagotchi | Package Registry | Verify registration; retrieve immutable care rules and sprite configuration | Through the gateway |
-| Battle | Tamagotchi, Package Registry, User Management | Reserve pets, snapshot stats/rules, settle pet XP/transfer and global currency | Through the gateway |
-| Monster Raid | Guild, Tamagotchi, Package Registry, User Management | Check membership, reserve primary pets, read rules, settle rewards | Through the gateway |
-| Package Registry | RabbitMQ → Monster Raid | Activate/cancel a scheduled raid using a versioned definition | Later lab; today `/internal/v1/dev/raid-events` |
-| User Management, Map, Guild, Battle, Tamagotchi, Monster Raid | RabbitMQ → Notification | Persist and deliver targeted user notifications | Later lab; today `/internal/v1/dev/events` |
+| Clients | Monster Raid | Live raid HP (SSE) | Streamed through the gateway and the broker |
+| Map | User Management | Filter friends/enemies and unrelated proximity candidates | Broker, gRPC `Broker.Call` |
+| User Management | Package Registry | Verify local-wallet registration and pinned raid reward rules | Broker, gRPC `Broker.Call` |
+| Package Registry | User Management, Guild | Validate developer identity and scheduled raid target guild | Broker, HTTP `/internal/...` (gRPC once the owner adds it) |
+| Notification | Guild | Resolve the recipient set for raid-start notifications | Broker, HTTP `/internal/...` (gRPC once the owner adds it) |
+| Guild | User Management, Package Registry | Verify invitee identity, accepted friendship and shared package | Broker, HTTP `/internal/...` (gRPC once the owner adds it) |
+| Guild | Notification | `GuildInvited` | Broker to `/internal/v1/dev/events` today; topic `guild.invited` planned |
+| Tamagotchi | Package Registry | Verify registration; retrieve immutable care rules and sprite configuration | Broker, HTTP `/internal/...` (gRPC once the owner adds it) |
+| Battle | Tamagotchi, Package Registry, User Management | Reserve pets, snapshot stats/rules, settle pet XP/transfer and global currency | Broker, HTTP `/internal/...` (gRPC once the owner adds it) |
+| Monster Raid | Guild, Tamagotchi, Package Registry, User Management | Check membership, reserve primary pets, read rules, settle rewards | Broker, HTTP `/internal/...` (gRPC once the owner adds it) |
+| Package Registry | Monster Raid | Activate/cancel a scheduled raid using a versioned definition | Broker to `/internal/v1/dev/raid-events` today; topic `raid.scheduled` planned |
+| User Management, Map | Any subscriber | `user.registered`, `friend.*`, `enemy.*`, `users.nearby` | Broker topics, durable, at least once (Map subscribes to `friend.removed`, `enemy.unmarked`) |
+| Guild, Battle, Tamagotchi, Monster Raid | Notification | Persist and deliver targeted user notifications | Broker to `/internal/v1/dev/events` today; topics as owners adopt them |
 
 ## Technologies and trade-offs
 
@@ -575,6 +579,33 @@ This section defines the team policy. **Documented rules are not proof that GitH
 - Keep secrets, `.env`, Firebase service-account keys and dependencies out of Git. Use placeholders in `.env.example`. Individual repos must apply their own `.gitignore` because the parent repo's ignore file does not govern submodule contents.
 
 Private repos admit the professor(s), not teammates, as required by the lab. Peer review of shared contracts happens in this public repo; the private owner applies the agreed contract in their own README. Do not require an unavailable teammate approval in private repo settings.
+
+## Lab 4 — Message broker
+
+Lab 4 puts a message broker between the gateway and the services and between the services. The team contract is [docs/lab-4-conventions.md](docs/lab-4-conventions.md); what Mădălina's parts implement and how they were verified is in [docs/lab-4-contract-madalina.md](docs/lab-4-contract-madalina.md).
+
+- **Message broker** ([MadalinaDev/message-broker](https://github.com/MadalinaDev/message-broker), Python, `0.5.0`, ports 8090 and 50051):
+  - a queue per service for the gateway's requests;
+  - service-to-service calls over HTTP and gRPC;
+  - least-loaded routing, a circuit breaker per replica and rerouting to another replica;
+  - topics with durable queues, a dead-letter channel and thread-per-request.
+- **Gateway `0.5.0`:** routes through the broker, serves no `/internal` route, exports `/metrics`, and lets admins download every container's logs (`GET /api/v1/admin/logs`).
+- **Service Discovery `0.5.0`:** registrations carry `grpc_port` and `topics`; `/metrics` exports every replica's load.
+- **User Management and Map `0.5.0`:** they call each other over gRPC through the broker, publish their outbox events on topics, and Map subscribes to `friend.removed` and `enemy.unmarked`.
+- **Monitoring:** Prometheus, Loki with Grafana Alloy, and Grafana with a provisioned dashboard.
+
+Run and look:
+
+```sh
+docker compose up -d --wait
+curl http://localhost:8090/v1/queues          # every service's queue and replicas (load, in flight, breaker)
+curl http://localhost:8090/v1/topics          # topics, subscribers and counters
+curl http://localhost:8090/v1/dead-letters    # the dead-letter channel
+curl http://localhost:8089/v1/services        # replicas with grpc_port and topics
+# Grafana: http://localhost:3000 · Prometheus: http://localhost:9090
+npx newman run postman/lab-4-broker.postman_collection.json \
+  --env-var broker_admin_token=$BROKER_ADMIN_TOKEN --env-var map_service_token=$MAP_SERVICE_TOKEN
+```
 
 ## Lab 3 — Scaling up
 
@@ -1069,6 +1100,7 @@ The common repository stores shared documentation, collaboration files and Git s
 | `services/package-registry-service` | [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service) | Lab 1 implementation published (image `0.1.0`); linked as submodule |
 | `services/gateway-service` | [MadalinaDev/gateway-service](https://github.com/MadalinaDev/gateway-service) | Lab 2: repository set up (README, PR template, PR policy, `main`/`dev`); professor and all teammates invited; linked as submodule |
 | `services/service-discovery` | [MadalinaDev/service-discovery](https://github.com/MadalinaDev/service-discovery) | Lab 3: README, PR policy and CI (tests on PRs, image on merge to `main`); professor and all teammates invited; linked as submodule |
+| `services/message-broker` | [MadalinaDev/message-broker](https://github.com/MadalinaDev/message-broker) | Lab 4: README, PR policy and CI (generated gRPC code, lint and tests on PRs, image on merge to `main`); all teammates invited; linked as submodule |
 
 Do not add fake submodules or copy private source into public folders. A real submodule needs a remote URL and an existing commit. To add one from the common repo after the service owner has pushed its README:
 
