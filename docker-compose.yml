@@ -185,7 +185,10 @@ services:
         condition: service_healthy
       message-broker:
         condition: service_healthy
-    image: ekkusuu/tamagotchi-battle-service:0.4.0
+    # 0.5.0 (Lab 4, docs/lab-4-contract-sava.md): calls User Management,
+    # Tamagotchi and Package Registry with gRPC Broker.Call, serves a gRPC
+    # ServiceEndpoint on 9081 and publishes battle.finished on the broker.
+    image: ekkusuu/tamagotchi-battle-service:0.5.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     # Lab 3: timeouts, expiry and preparation are claimed in the
@@ -205,12 +208,15 @@ services:
       SEED_ON_START: "true"
       TASK_TIMEOUT: 5s
       MAX_CONCURRENT_TASKS: "50"
-      # Lab 4: calls to other services go through the message broker, same paths and token.
-      GATEWAY_URL: http://message-broker:8090
+      # Lab 4: calls to other services are gRPC Broker.Call with this service token
+      # (no GATEWAY_URL: the HTTP fallback is not needed).
+      BROKER_GRPC_URL: message-broker:50051
+      GRPC_PORT: "9081"
       GATEWAY_SERVICE_TOKEN: ${BATTLE_SERVICE_TOKEN}
       GATEWAY_SECRET: ${GATEWAY_SECRET}
     expose:
       - "8081"
+      - "9081"
 
   tamagotchi-service:
     <<: *service
@@ -219,7 +225,10 @@ services:
         condition: service_healthy
       message-broker:
         condition: service_healthy
-    image: ekkusuu/tamagotchi-tamagotchi-service:0.4.0
+    # 0.5.0 (Lab 4, docs/lab-4-contract-sava.md): calls Package Registry with
+    # gRPC Broker.Call, serves a gRPC ServiceEndpoint on 9082 and subscribes to
+    # battle.finished (inbox_events + battle_results).
+    image: ekkusuu/tamagotchi-tamagotchi-service:0.5.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     # Lab 3: reservations and settlement live in the database, so
@@ -239,12 +248,15 @@ services:
       SEED_ON_START: "true"
       TASK_TIMEOUT: 5s
       MAX_CONCURRENT_TASKS: "50"
-      # Lab 4: calls to other services go through the message broker, same paths and token.
-      GATEWAY_URL: http://message-broker:8090
+      # Lab 4: calls to other services are gRPC Broker.Call with this service token
+      # (no GATEWAY_URL: the HTTP fallback is not needed).
+      BROKER_GRPC_URL: message-broker:50051
+      GRPC_PORT: "9082"
       GATEWAY_SERVICE_TOKEN: ${TAMAGOTCHI_SERVICE_TOKEN}
       GATEWAY_SECRET: ${GATEWAY_SECRET}
     expose:
       - "8082"
+      - "9082"
 
   guild-service:
     <<: *service
