@@ -265,7 +265,7 @@ services:
         condition: service_healthy
       message-broker:
         condition: service_healthy
-    image: nikvnln/tamagotchi-guild-service:0.4.1
+    image: nikvnln/tamagotchi-guild-service:0.5.0
     # Lab 3: chat tickets live in the database and chat events reach every
     # replica through Postgres LISTEN/NOTIFY, so any replica can serve a socket.
     deploy:
@@ -285,12 +285,16 @@ services:
       # Lab 4: calls to other services go through the message broker, same paths and token.
       GATEWAY_URL: http://message-broker:8090
       SERVICE_TOKEN: ${GUILD_SERVICE_TOKEN}
+      # Lab 4: calls to other services and topic events go through the broker over gRPC.
+      BROKER_GRPC_URL: message-broker:50051
+      GRPC_PORT: "9083"
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
     # No host port here: replicas cannot share one, and Docker does not say
     # which replica would get which port of a range. `guild-ws` publishes 8083.
     expose:
       - "8083"
+      - "9083"
 
   guild-ws:
     # Fixed entry for the chat WebSocket that the gateway hands out
@@ -315,7 +319,7 @@ services:
         condition: service_healthy
       message-broker:
         condition: service_healthy
-    image: nikvnln/tamagotchi-notification-service:0.4.1
+    image: nikvnln/tamagotchi-notification-service:0.5.0
     # Lab 3: all state is in the database, so replicas are interchangeable.
     deploy:
       replicas: 2
@@ -333,10 +337,14 @@ services:
       # Lab 4: calls to other services go through the message broker, same paths and token.
       GATEWAY_URL: http://message-broker:8090
       SERVICE_TOKEN: ${NOTIFICATION_SERVICE_TOKEN}
+      # Lab 4: calls to other services and topic events go through the broker over gRPC.
+      BROKER_GRPC_URL: message-broker:50051
+      GRPC_PORT: "9084"
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
     expose:
       - "8084"
+      - "9084"
 
   user-management-service:
     <<: *service
