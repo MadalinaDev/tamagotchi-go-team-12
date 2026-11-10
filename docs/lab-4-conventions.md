@@ -88,9 +88,14 @@ Serve `ServiceEndpoint` from the same proto on a gRPC port, and register it as `
   - Do not inject requests into a live Express app with tools like light-my-request: they rewire the request prototype that every later HTTP request shares.
 - **`Deliver(EventDelivery) → DeliveryReply`:** one event of a topic you subscribed to (section 6.3).
   - Check the metadata `x-gateway-secret`.
-  - `OK` = handled.
-  - `INVALID_ARGUMENT`, `NOT_FOUND` or `FAILED_PRECONDITION` = rejected for good: the event goes to the dead-letter channel.
-  - Any other error (use `UNAVAILABLE`) is retried later.
+  - `OK` = handled. `ALREADY_EXISTS` counts as handled too: you had the event already.
+  - **Rejected for good**, so the event goes to the dead-letter channel:
+    - `INVALID_ARGUMENT`, `NOT_FOUND`, `FAILED_PRECONDITION` and `OUT_OF_RANGE`;
+    - `UNIMPLEMENTED`;
+    - `UNAUTHENTICATED` and `PERMISSION_DENIED`.
+
+    This mirrors the final HTTP 4xx answers of section 6.3. Retrying a wrong `x-gateway-secret` or a missing method cannot succeed; once it is fixed, replay the dead letter (section 6.5).
+  - Any other error (use `UNAVAILABLE`) is retried later. `DEADLINE_EXCEEDED` counts as a failed attempt.
 
 ### 3.4 Rerouting and idempotency (grade 10)
 
