@@ -35,7 +35,7 @@ The architecture diagram is in the [README](../README.md#architecture).
 | Service Discovery | 8089 | 8089 (demo) |
 | Battle, Tamagotchi, Guild, Notification | 8081, 8082, 8083, 8084 (HTTP); gRPC `90xx` once added (suggested 9081, 9082, 9083, 9084) | Guild's chat WebSocket only |
 | User Management, Map | 8085, 8086 (HTTP); 9085, 9086 (gRPC) | no |
-| Monster Raid, Package Registry | 8087, 8088 (HTTP); gRPC suggested 9087, 9088 | no |
+| Monster Raid, Package Registry | 8087, 8088 (HTTP); 9087, 9088 (gRPC) | no |
 | Prometheus, Loki, Grafana | 9090, 3100, 3000 | 9090, 3100, 3000 |
 
 Every service still registers with Service Discovery (Lab 3, section 6). The broker reads the registry every 2 s.
@@ -196,8 +196,9 @@ The broker logs `delivery.dead_lettered` (ERROR).
 | `enemy.unmarked` | User Management | `{user_id, enemy_id}` | **Map** | — |
 | `users.nearby` | Map | `{user_ids, ...}` (`UsersNearby`) | — | **Notification** (push), Battle |
 | `guild.invited` | Guild (to add) | the `GuildInvited` event of `/internal/v1/dev/events` | — | **Notification** |
-| `raid.scheduled` | Package Registry (to add) | what `/internal/v1/dev/raid-events` sends | — | **Monster Raid** |
-| `raid.started`, `raid.finished` | Monster Raid (to add) | raid ID, guild, result | — | **Notification**, Tamagotchi |
+| `raid.activation-requested` | Package Registry | `RaidActivationRequested`: `{schedule_id, revision, definition_id, definition_version, guild_id, starts_at}` | **Monster Raid** | — |
+| `raid.cancellation-requested` | Package Registry | `RaidCancellationRequested`: `{schedule_id, revision}` | **Monster Raid** | — |
+| `raid.started`, `raid.finished` | Monster Raid | `RaidStarted` `{raid_id, guild_id, ends_at}`; `RaidFinished` `{raid_id, guild_id, state, participant_ids}` | — | **Notification**, Tamagotchi |
 | `battle.finished` | Battle (to add) | battle ID, winner, loser | — | **Notification**, Tamagotchi |
 
 The `/internal/v1/dev/events` and `/internal/v1/dev/raid-events` endpoints were the Lab 2 stand-ins for a broker. They become topics: the producer publishes, and the consumer subscribes and keeps its handler.
@@ -293,7 +294,7 @@ The answer is a file (`Content-Disposition: attachment; filename="tamagotchi-log
 
    Suggested split, from the catalogue in section 6.6:
    - **Vica:** Notification subscribes to `friend.requested` and `users.nearby`; Guild publishes `guild.invited`.
-   - **Sabina:** Package Registry publishes `raid.scheduled`; Monster Raid subscribes to it and publishes `raid.started` and `raid.finished`.
+   - **Sabina:** Package Registry publishes `raid.activation-requested` and `raid.cancellation-requested` (the Lab 0 routing keys; a cancellation is its own event); Monster Raid subscribes to both and publishes `raid.started` and `raid.finished` ([lab-4-contract-sabina.md](lab-4-contract-sabina.md)).
    - **Sava:** Battle publishes `battle.finished`; Tamagotchi subscribes to it.
 3. **Release.**
    - Images `0.5.0`, with Compose updated (image, `GRPC_PORT`, `BROKER_GRPC_URL`) in a PR to `dev`.
