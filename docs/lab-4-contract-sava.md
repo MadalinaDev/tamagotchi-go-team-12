@@ -99,7 +99,7 @@ The inbox row and the `battle_results` row are written in **one transaction**, a
 | Same battle, a different winner, loser or captured pet | `FAILED_PRECONDITION` (`event.rejected`), nothing written | dead letter, reason `rejected` |
 | Topic other than `battle.finished` | `INVALID_ARGUMENT` | dead letter |
 | Database error, timeout, task limit reached, shutting down | `UNAVAILABLE` (`event.failed`) | retried after 1, 2, 4, 8, 16 s, on another replica when possible |
-| Wrong or missing `x-gateway-secret` | `UNAUTHENTICATED` (`auth.rejected`) | dead letter at once, reason `rejected`, `attempts: 1` (observed with a Tamagotchi started with another `GATEWAY_SECRET`); the conventions' section 3.3 says only the three codes above reject |
+| Wrong or missing `x-gateway-secret` | `UNAUTHENTICATED` (`auth.rejected`) | dead letter at once, reason `rejected`, `attempts: 1` (observed with a Tamagotchi started with another `GATEWAY_SECRET`); conventions section 3.3 lists this code |
 
 ## Configuration
 
