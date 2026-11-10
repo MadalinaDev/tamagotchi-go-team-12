@@ -420,9 +420,19 @@ services:
 
   monster-raid-service:
     <<: *service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
     # 0.4.0: /status, JSON logs, Service Discovery, circuit breakers, and live HP
     # across replicas through Postgres NOTIFY (docs/lab-3-contract-sabina.md).
-    image: sabinapopescu/tamagotchi-monster-raid-service:0.4.0
+    # 0.5.0 (Lab 4, docs/lab-4-contract-sabina.md): calls Guild, Tamagotchi,
+    # Package Registry and User Management with gRPC Broker.Call, serves a gRPC
+    # ServiceEndpoint on 9087, creates and cancels raids from the topics
+    # raid.activation-requested / raid.cancellation-requested and publishes
+    # raid.started / raid.finished.
+    image: sabinapopescu/tamagotchi-monster-raid-service:0.5.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     deploy:
@@ -436,24 +446,36 @@ services:
       # Lab 2 task limits: 504 TASK_TIMEOUT, 503 TOO_MANY_CONCURRENT_TASKS.
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
-      # Calls to other services go through the broker (Lab 4), with SERVICE_TOKEN
-      # (mapped to this service's X-Service-Name).
-      # Lab 4: calls to other services go through the message broker, same paths and token.
-      GATEWAY_URL: http://message-broker:8090
+      # Lab 4: calls to other services are gRPC Broker.Call with this service token
+      # (no GATEWAY_URL: the HTTP fallback is not needed).
+      BROKER_GRPC_URL: message-broker:50051
+      GRPC_PORT: "9087"
       SERVICE_TOKEN: ${RAID_SERVICE_TOKEN}
-      # Guild, Tamagotchi, Package Registry and User Management are all real.
+      # Guild, Tamagotchi, Package Registry and User Management are all real, and
+      # raids come only from the broker's topics (the dev route answers 404).
       USE_MOCKS: "false"
-      # Same secret as the gateway: requests without X-Gateway-Secret get 401.
+      # Same secret as the gateway: requests without X-Gateway-Secret get 401,
+      # and topic deliveries without it are rejected.
       GATEWAY_SECRET: ${GATEWAY_SECRET}
-    # Lab 2: no host port; reachable only through gateway-service.
+    # Lab 2: no host port; reachable only through the gateway and the broker.
     expose:
       - "8087"
+      - "9087"
 
   package-registry-service:
     <<: *service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
     # 0.4.0: /status, JSON logs, Service Discovery, circuit breakers; all state is
     # in Postgres, so replicas are interchangeable (docs/lab-3-contract-sabina.md).
-    image: sabinapopescu/tamagotchi-package-registry-service:0.4.0
+    # 0.5.0 (Lab 4, docs/lab-4-contract-sabina.md): calls User Management and
+    # Guild with gRPC Broker.Call, serves a gRPC ServiceEndpoint on 9088 and
+    # publishes raid.activation-requested / raid.cancellation-requested from a
+    # transactional outbox.
+    image: sabinapopescu/tamagotchi-package-registry-service:0.5.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     deploy:
@@ -467,19 +489,20 @@ services:
       # Lab 2 task limits: 504 TASK_TIMEOUT, 503 TOO_MANY_CONCURRENT_TASKS.
       TASK_TIMEOUT_MS: "5000"
       MAX_CONCURRENT_TASKS: "50"
-      # Calls to other services go through the broker (Lab 4), with SERVICE_TOKEN
-      # (mapped to this service's X-Service-Name).
-      # Lab 4: calls to other services go through the message broker, same paths and token.
-      GATEWAY_URL: http://message-broker:8090
+      # Lab 4: calls to other services are gRPC Broker.Call with this service token
+      # (no GATEWAY_URL: the HTTP fallback is not needed).
+      BROKER_GRPC_URL: message-broker:50051
+      GRPC_PORT: "9088"
       SERVICE_TOKEN: ${REGISTRY_SERVICE_TOKEN}
       USE_MOCKS: "false"
       # Same secret as the gateway: requests without X-Gateway-Secret get 401.
       GATEWAY_SECRET: ${GATEWAY_SECRET}
       # Fixed-ID seed (PetHub, MoodPets, registrations, Big Slime) when empty.
       SEED_ON_START: "true"
-    # Lab 2: no host port; reachable only through gateway-service.
+    # Lab 2: no host port; reachable only through the gateway and the broker.
     expose:
       - "8088"
+      - "9088"
 
   # Lab 4, grade 10: Prometheus scrapes the broker, the gateway and Service
   # Discovery (which exports every replica's load from its /status polls);

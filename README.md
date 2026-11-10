@@ -592,6 +592,7 @@ Lab 4 puts a message broker between the gateway and the services and between the
 - **Gateway `0.5.0`:** routes through the broker, serves no `/internal` route, exports `/metrics`, and lets admins download every container's logs (`GET /api/v1/admin/logs`).
 - **Service Discovery `0.5.0`:** registrations carry `grpc_port` and `topics`; `/metrics` exports every replica's load.
 - **User Management and Map `0.5.0`:** they call each other over gRPC through the broker, publish their outbox events on topics, and Map subscribes to `friend.removed` and `enemy.unmarked`.
+- **Monster Raid and Package Registry `0.5.0`** ([Sabina's Lab 4 notes](docs/lab-4-contract-sabina.md)): gRPC through the broker both ways. Package Registry publishes raid activations and cancellations from its outbox, and Monster Raid creates and cancels raids from those topics and publishes `raid.started` and `raid.finished`.
 - **Monitoring:** Prometheus, Loki with Grafana Alloy, and Grafana with a provisioned dashboard.
 
 Run and look:

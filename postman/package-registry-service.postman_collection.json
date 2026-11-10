@@ -62,6 +62,11 @@
     {
       "key": "schedule_id",
       "value": ""
+    },
+    {
+      "key": "discovery_url",
+      "value": "http://localhost:8089",
+      "description": "Lab 4: Service Discovery, for the gRPC registration check."
     }
   ],
   "event": [
@@ -929,7 +934,8 @@
                   "language": "json"
                 }
               }
-            }
+            },
+            "description": "Lab 4: the activation and RaidActivationRequested commit together (outbox); the event goes to the broker topic raid.activation-requested, and Monster Raid creates the raid."
           }
         },
         {
@@ -1007,7 +1013,8 @@
                   "language": "json"
                 }
               }
-            }
+            },
+            "description": "Lab 4: RaidCancellationRequested goes to the broker topic raid.cancellation-requested; Monster Raid cancels the raid."
           }
         }
       ]
@@ -1134,6 +1141,65 @@
             "method": "GET",
             "header": [],
             "url": "{{broker_url}}/internal/v1/packages/{{package_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "[Lab 4] Broker",
+      "item": [
+        {
+          "name": "[Lab 4] Registration carries grpc_port and no topics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const replicas = pm.response.json().instances;",
+                  "pm.test('Package Registry registered its gRPC port and subscribes to no topic', () => {",
+                  "  pm.expect(replicas.length).to.be.at.least(1);",
+                  "  replicas.forEach(i => { pm.expect(i.grpc_port).to.eql(9088); pm.expect(i.topics).to.eql([]); });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{discovery_url}}/v1/services/package-registry/instances"
+          }
+        },
+        {
+          "name": "[Lab 4] The schedule events went to the broker",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const tries = Number(pm.collectionVariables.get('poll_tries') || 0);",
+                  "if (!((pm.response.json().topics || []).filter(t => ['raid.activation-requested', 'raid.cancellation-requested'].includes(t.name) && t.published >= 1).length === 2) && tries < 40) {",
+                  "  pm.collectionVariables.set('poll_tries', String(tries + 1));",
+                  "  setTimeout(() => {}, 250);",
+                  "  postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.collectionVariables.unset('poll_tries');",
+                  "  const topics = pm.response.json().topics;",
+                  "  const topic = (name) => topics.find(t => t.name === name) || { subscribers: [], published: 0 };",
+                  "  pm.test('raid.activation-requested and raid.cancellation-requested were published', () => ['raid.activation-requested', 'raid.cancellation-requested'].forEach(n => pm.expect(topic(n).published).to.be.at.least(1)));",
+                  "  pm.test('Monster Raid is their subscriber', () => ['raid.activation-requested', 'raid.cancellation-requested'].forEach(n => pm.expect(topic(n).subscribers).to.include('monster-raid')));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{broker_url}}/v1/topics",
+            "description": "Repeated every 250 ms (at most 10 s) until the outbox relay has published both events."
           }
         }
       ]
