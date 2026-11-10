@@ -141,8 +141,8 @@ Both services publish through a **transactional outbox**:
 | --- | --- | --- | --- |
 | `raid.activation-requested` | Package Registry (`RaidActivationRequested`) | `{schedule_id, revision, definition_id, definition_version, guild_id, starts_at}` | Monster Raid |
 | `raid.cancellation-requested` | Package Registry (`RaidCancellationRequested`) | `{schedule_id, revision}` | Monster Raid |
-| `raid.started` | Monster Raid (`RaidStarted`) | `{raid_id, guild_id, ends_at}` | none yet (suggested: Notification) |
-| `raid.finished` | Monster Raid (`RaidFinished`) | `{raid_id, guild_id, state, participant_ids}`; `state` is `completed`, `failed` or `cancelled` | none yet (suggested: Notification, Tamagotchi) |
+| `raid.started` | Monster Raid (`RaidStarted`) | `{raid_id, guild_id, ends_at}` | Notification (#70) |
+| `raid.finished` | Monster Raid (`RaidFinished`) | `{raid_id, guild_id, state, participant_ids}`; `state` is `completed`, `failed` or `cancelled` | Notification (#70); suggested: Tamagotchi |
 
 **Topic names.** The scheduling topics are the Lab 0 routing keys rather than
 the single `raid.scheduled` of the catalogue's first draft, because a
@@ -267,7 +267,7 @@ side with another copy on remapped host ports, with alerts off.
 | The Monster Raid and Package Registry collections | Monster Raid 56 requests, 92 assertions; Package Registry 36 requests, 85 assertions; 0 failures |
 | The other six collections and the Lab 4 collection | Battle 36, Tamagotchi 35, Guild 88, Notification 34, User Management 54, Map 24, Lab 4 broker 30 assertions; 0 failures |
 | An admin activates a schedule through the gateway | `202`; the raid exists in Monster Raid (`active`) |
-| The broker's log for that request ID | `topic.published` for `raid.activation-requested`, `delivery.succeeded`, then `grpc.request` lines with `caller: monster-raid`. Package Registry's raid definition was reached over gRPC `Handle` (`transport: grpc`) and Guild's guild over HTTP (Guild registers no `grpc_port` yet), then `topic.published` for `raid.started` |
+| The broker's log for that request ID | `topic.published` for `raid.activation-requested`, `delivery.succeeded`, then `grpc.request` lines with `caller: monster-raid`. Package Registry's raid definition was reached over gRPC `Handle` (`transport: grpc`) and Guild's guild over HTTP (Guild 0.4.1 registered no `grpc_port` at the time), then `topic.published` for `raid.started` |
 | Monster Raid's and Package Registry's own logs, same request ID | Monster Raid: `rpc.request Deliver raid.activation-requested -> OK`, `raid.created`, `event.handled`, `event.published`. Package Registry: `rpc.request Handle GET /internal/v1/raid-definitions/… -> 200` with `caller: monster-raid` |
 | The collection's raid (join, kill, settlement) | `Broker.Call` from Monster Raid to Tamagotchi (`tamagotchi-reservations` 201, `tamagotchi-settlements` 200), User Management (`wallets/settlements` 200) and Package Registry (care and raid definitions 200). Every attempt to these replicas went over gRPC `Handle` |
 | An event on `raid.activation-requested` published with the broker's operator token, with an invalid payload | dead letter at once: `reason: rejected`, `attempts: 1`, `last_error: gRPC INVALID_ARGUMENT: published by operator, expected package-registry; payload.schedule_id: isUuid; …` |
@@ -287,9 +287,15 @@ side with another copy on remapped host ports, with alerts off.
 
 ## Open items
 
-- **Subscribers.** Nobody subscribes to `raid.started` or `raid.finished`
-  yet. Notification could notify the guild members and the participants
-  (conventions, section 6.6).
-- **Guild over HTTP.** Guild registers no `grpc_port` yet, so the broker
-  reaches it over HTTP. Monster Raid's and Package Registry's calls to Guild
-  move to gRPC by themselves once it does.
+None for these two services. The two items this page listed are closed by
+Vica's Guild and Notification `0.5.0` (#70):
+
+- **Subscribers.** Notification subscribes to `raid.started` and
+  `raid.finished`. On `raid.started` it resolves the guild's members
+  through Guild and notifies them. Monster Raid's events therefore reach
+  users without any change on this side.
+- **Guild over gRPC.** Guild serves `ServiceEndpoint` on 9083 and registers
+  it as `grpc_port`. The broker uses gRPC for every `Broker.Call` to a
+  replica with a `grpc_port` (section 3.3). Monster Raid's and Package
+  Registry's calls to Guild therefore go over gRPC with no change in these
+  two services. Before that they went over HTTP.
