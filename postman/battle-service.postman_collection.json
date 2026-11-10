@@ -21,6 +21,10 @@
     {
       "key": "pet_ripple",
       "value": "00000000-0000-4000-8000-0000000000b2"
+    },
+    {
+      "key": "discovery_url",
+      "value": "http://localhost:8089"
     }
   ],
   "event": [
@@ -56,7 +60,7 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "var expected = {\"Gateway health\": 200, \"Login Alice\": 200, \"Login Bob\": 200, \"[Alice] Rules\": 200, \"[Alice] Create\": 201, \"[Alice] Get\": 200, \"[Alice] List\": 200, \"[Alice] Invalid ID\": 422, \"Missing identity\": 401, \"[Bob] Decline\": 200, \"[Alice] Update declined\": 409, \"[Alice] Cancel declined\": 409};",
+          "var expected = {\"Gateway health\": 200, \"Login Alice\": 200, \"Login Bob\": 200, \"[Alice] Rules\": 200, \"[Alice] Create\": 201, \"[Alice] Get\": 200, \"[Alice] List\": 200, \"[Alice] Invalid ID\": 422, \"Missing identity\": 401, \"[Bob] Decline\": 200, \"[Alice] Update declined\": 409, \"[Alice] Cancel declined\": 409, \"[Lab 4] Registration carries grpc_port and no topics\": 200, \"[Lab 4] battle.finished: Tamagotchi is the subscriber\": 200};",
           "pm.test(pm.info.requestName + ' status', function () { pm.response.to.have.status(expected[pm.info.requestName]); });",
           "if (pm.response.code !== 204) { var b = pm.response.json();",
           "pm.test('Request ID returned', function () { pm.expect(pm.response.headers.get('X-Request-ID')).to.match(/^[a-f0-9-]{36}$/); });",
@@ -178,6 +182,49 @@
           "raw": "{}"
         }
       }
+    },
+    {
+      "name": "[Lab 4] Registration carries grpc_port and no topics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{discovery_url}}/v1/services/battle/instances"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const replicas = pm.response.json().instances;",
+              "pm.test('Battle registered with its gRPC port and subscribes to no topic', () => {",
+              "  pm.expect(replicas.length).to.be.at.least(1);",
+              "  replicas.forEach(i => { pm.expect(i.grpc_port).to.eql(9081); pm.expect(i.topics).to.eql([]); });",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "[Lab 4] battle.finished: Tamagotchi is the subscriber",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{broker_url}}/v1/topics"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const byName = Object.fromEntries(pm.response.json().topics.map(t => [t.name, t]));",
+              "pm.test('battle.finished is delivered to tamagotchi', () => pm.expect(byName['battle.finished'].subscribers).to.eql(['tamagotchi']));"
+            ]
+          }
+        }
+      ]
     }
   ]
 }
