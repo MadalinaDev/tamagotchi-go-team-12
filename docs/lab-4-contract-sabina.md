@@ -12,10 +12,15 @@ Raid and Package Registry (NestJS + Prisma), and how they were verified.
 - Mădălina's parts are in [lab-4-contract-madalina.md](lab-4-contract-madalina.md),
   Sava's in [lab-4-contract-sava.md](lab-4-contract-sava.md).
 
-Repositories: [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service)
-(#11) and [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service)
-(#9), branch `feat/lab-4/broker`. Each README has a "Message Broker (Lab 4)"
-section with the details.
+Repositories:
+
+- [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service):
+  #11, released to `main` by #12 (`39d6cc7`);
+- [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service):
+  #9, released by #10 (`546dd35`).
+
+CI published both `0.5.0` images from those commits. Each README has a
+"Message Broker (Lab 4)" section with the details.
 
 ## What changed
 
@@ -246,9 +251,11 @@ Extras, not needed by the team stack:
 side with another copy on remapped host ports, with alerts off.
 
 - **Images:** Monster Raid and Package Registry `0.5.0` were built locally
-  from #11 (`c28cbcd`) and #9 (`0fc6a84`). All other images were the
-  published ones: the broker, Service Discovery, the gateway, User Management,
-  Map, Battle and Tamagotchi `0.5.0`, and Guild and Notification `0.4.1`.
+  from #11 (`c28cbcd`) and #9 (`0fc6a84`). The release commits
+  `39d6cc7` and `546dd35` have the same file trees, so the published
+  images are the code tested here. All other images were the published ones:
+  the broker, Service Discovery, the gateway, User Management, Map, Battle and
+  Tamagotchi `0.5.0`, and Guild and Notification `0.4.1`.
 - **Before that,** both services ran against the released broker and Service
   Discovery `0.5.0` alone, with a Guild stub. 15 checks passed, including
   durability and the dead-letter channel.
@@ -280,9 +287,6 @@ side with another copy on remapped host ports, with alerts off.
 
 ## Open items
 
-- **Release.** #11 and #9 have to be merged and released to `main`. CI then
-  pushes the `0.5.0` images, and this PR's submodules move to those release
-  commits.
 - **Subscribers.** Nobody subscribes to `raid.started` or `raid.finished`
   yet. Notification could notify the guild members and the participants
   (conventions, section 6.6).
