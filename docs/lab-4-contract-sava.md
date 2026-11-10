@@ -118,7 +118,7 @@ Battle and Tamagotchi run `0.5.0` as two replicas each, with `BROKER_GRPC_URL: m
 
 ## Verification
 
-Full stack of this compose file on 2026-11-10 with alerts switched off (`ALERT_*` empty in the Service Discovery container). Images: Gateway `0.5.0` built from `dev` of MadalinaDev/gateway-service (not published yet), Battle and Tamagotchi `0.5.0` built from their branches (not published yet), the published `0.5.0` images of the broker, Service Discovery, User Management and Map, and the `0.4.x` images of the other services.
+Full stack of this compose file on 2026-11-10 with alerts switched off (`ALERT_*` empty in the Service Discovery container). Images: Gateway `0.5.0` built from `dev` of MadalinaDev/gateway-service (not published yet), Battle and Tamagotchi `0.5.0` built locally from the branches of battle-service#5 and tamagotchi-service#5, the sources of the published images, the published `0.5.0` images of the broker, Service Discovery, User Management and Map, and the `0.4.x` images of the other services.
 
 | Check | Result |
 | --- | --- |
@@ -150,6 +150,6 @@ Not observed on the stack: `event.duplicate` in Tamagotchi's log. The broker sto
 
 ## Open items
 
-- Publishing: the `0.5.0` images of Battle and Tamagotchi (and the Gateway's) are not on Docker Hub yet; the verification above used local builds of the same sources. The submodule pointers of `services/battle-service` and `services/tamagotchi-service` still name `0.4.0` and move with the releases.
+- Publishing: the Gateway's `0.5.0` image is not on Docker Hub yet. It comes with the Gateway's release to `main`, and Compose needs it.
 - Nobody subscribes to `battle.requested`, `pet.activity-started` or `pet.transferred` yet. Notification could subscribe to `battle.finished` and `battle.requested` (conventions, section 6.6).
 - Service Discovery closes idle connections, so a replica's heartbeat sometimes fails once with `connection reset by peer` or `EOF` and succeeds on the next beat (about every 5 s, 15 s TTL). This predates Lab 4 and did not make any replica leave the registry during the checks above.
