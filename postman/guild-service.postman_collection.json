@@ -1846,9 +1846,9 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/internal/v1/guilds/{{founders_guild_id}}",
+              "raw": "{{broker_url}}/internal/v1/guilds/{{founders_guild_id}}",
               "host": [
-                "{{base_url}}"
+                "{{broker_url}}"
               ],
               "path": [
                 "internal",
@@ -1882,9 +1882,9 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/internal/v1/guilds/{{founders_guild_id}}/members",
+              "raw": "{{broker_url}}/internal/v1/guilds/{{founders_guild_id}}/members",
               "host": [
-                "{{base_url}}"
+                "{{broker_url}}"
               ],
               "path": [
                 "internal",
@@ -1920,9 +1920,9 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/internal/v1/guilds/{{founders_guild_id}}/members/{{bob_id}}",
+              "raw": "{{broker_url}}/internal/v1/guilds/{{founders_guild_id}}/members/{{bob_id}}",
               "host": [
-                "{{base_url}}"
+                "{{broker_url}}"
               ],
               "path": [
                 "internal",
@@ -1958,9 +1958,9 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/internal/v1/guilds/{{founders_guild_id}}",
+              "raw": "{{broker_url}}/internal/v1/guilds/{{founders_guild_id}}",
               "host": [
-                "{{base_url}}"
+                "{{broker_url}}"
               ],
               "path": [
                 "internal",
@@ -1988,6 +1988,12 @@
     }
   ],
   "variable": [
+    {
+      "key": "broker_url",
+      "value": "http://localhost:8090",
+      "type": "string",
+      "description": "Lab 4: the message broker; services call each other through it (/internal/...), no longer through the gateway."
+    },
     {
       "key": "base_url",
       "value": "http://localhost:8080"
