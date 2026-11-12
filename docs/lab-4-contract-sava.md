@@ -150,6 +150,5 @@ Not observed on the stack: `event.duplicate` in Tamagotchi's log. The broker sto
 
 ## Open items
 
-- Publishing: the Gateway's `0.5.0` image is not on Docker Hub yet. It comes with the Gateway's release to `main`, and Compose needs it.
 - Nobody subscribes to `battle.requested`, `pet.activity-started` or `pet.transferred` yet. Notification could subscribe to `battle.finished` and `battle.requested` (conventions, section 6.6).
-- Service Discovery closes idle connections, so a replica's heartbeat sometimes fails once with `connection reset by peer` or `EOF` and succeeds on the next beat (about every 5 s, 15 s TTL). This predates Lab 4 and did not make any replica leave the registry during the checks above.
+- Service Discovery closes idle connections, so a replica's heartbeat sometimes fails once with `connection reset by peer` or `EOF` and succeeds on the next beat (about every 5 s, 15 s TTL). This predates Lab 4 and did not make any replica leave the registry during the checks above. Fixed in `0.5.1` (no keep-alive in the Discovery client, [battle-service#6](https://github.com/Ekkusuu/battle-service/pull/6), [tamagotchi-service#6](https://github.com/Ekkusuu/tamagotchi-service/pull/6)); Compose moves to `0.5.1` once both images are on Docker Hub.
