@@ -809,6 +809,67 @@
           ]
         },
         {
+          "name": "Bob's inbox gets GuildInvited through the broker (topic guild.invited)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_bob}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/notifications?limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Lab 4: Guild publishes GuildInvited from its outbox; the broker delivers it to Notification.",
+                  "// Delivery is asynchronous, so this request is repeated (at most 20 times, 500 ms apart).",
+                  "if (Number(pm.collectionVariables.get('inbox_attempts') || 0) > 0) { setTimeout(() => {}, 500); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const inviteId = pm.collectionVariables.get('invite_id');",
+                  "const found = (pm.response.json().items || []).find(n => n.type === 'GuildInvited' && n.resource_id === inviteId);",
+                  "const attempts = Number(pm.collectionVariables.get('inbox_attempts') || 0);",
+                  "if (!found && attempts < 20) {",
+                  "  pm.collectionVariables.set('inbox_attempts', attempts + 1);",
+                  "  postman.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.collectionVariables.set('inbox_attempts', 0);",
+                  "  pm.test('the invite reached Notification through the broker', () => pm.expect(found, 'GuildInvited for invite ' + inviteId).to.be.an('object'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "List my invites (Bob)",
           "request": {
             "method": "GET",
@@ -2057,6 +2118,10 @@
     {
       "key": "ticket",
       "value": ""
+    },
+    {
+      "key": "inbox_attempts",
+      "value": "0"
     }
   ]
 }

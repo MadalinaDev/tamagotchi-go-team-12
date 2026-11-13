@@ -189,16 +189,16 @@ The broker logs `delivery.dead_lettered` (ERROR).
 | Topic | Publisher | Payload (`payload` of the envelope) | Subscribers today | Suggested subscribers |
 | --- | --- | --- | --- | --- |
 | `user.registered` | User Management | `{user_id, username, display_name}` | — | Notification (welcome), Tamagotchi (starter pet) |
-| `friend.requested` | User Management | `{friendship_id, requester_id, recipient_id}` | — | **Notification** (it was the Lab 1 RabbitMQ consumer) |
+| `friend.requested` | User Management | `{friendship_id, requester_id, recipient_id}` | **Notification** | — |
 | `friend.accepted` | User Management | `{friendship_id, user_ids: [a, b]}` | — | Notification, Guild |
 | `friend.removed` | User Management | `{friendship_id, user_ids: [a, b]}` | **Map** | Guild (invites need a friendship) |
 | `enemy.marked` | User Management | `{user_id, enemy_id}` | — | Battle |
 | `enemy.unmarked` | User Management | `{user_id, enemy_id}` | **Map** | — |
-| `users.nearby` | Map | `{user_ids, ...}` (`UsersNearby`) | — | **Notification** (push), Battle |
-| `guild.invited` | Guild (to add) | the `GuildInvited` event of `/internal/v1/dev/events` | — | **Notification** |
+| `users.nearby` | Map | `{user_ids, ...}` (`UsersNearby`) | **Notification** | Battle |
+| `guild.invited` | Guild (outbox, [lab-4-contract-vica.md](lab-4-contract-vica.md)) | `GuildInvited`: `{invite_id, guild_id, inviter_id, invitee_id}` | **Notification** | — |
 | `raid.activation-requested` | Package Registry | `RaidActivationRequested`: `{schedule_id, revision, definition_id, definition_version, guild_id, starts_at}` | **Monster Raid** | — |
 | `raid.cancellation-requested` | Package Registry | `RaidCancellationRequested`: `{schedule_id, revision}` | **Monster Raid** | — |
-| `raid.started`, `raid.finished` | Monster Raid | `RaidStarted` `{raid_id, guild_id, ends_at}`; `RaidFinished` `{raid_id, guild_id, state, participant_ids}` | — | **Notification**, Tamagotchi |
+| `raid.started`, `raid.finished` | Monster Raid | `RaidStarted` `{raid_id, guild_id, ends_at}`; `RaidFinished` `{raid_id, guild_id, state, participant_ids}` | **Notification** | Tamagotchi |
 | `battle.finished` | Battle (to add) | battle ID, winner, loser | — | **Notification**, Tamagotchi |
 
 The `/internal/v1/dev/events` and `/internal/v1/dev/raid-events` endpoints were the Lab 2 stand-ins for a broker. They become topics: the producer publishes, and the consumer subscribes and keeps its handler.
