@@ -5,6 +5,12 @@
   },
   "variable": [
     {
+      "key": "broker_url",
+      "value": "http://localhost:8090",
+      "type": "string",
+      "description": "Lab 4: the message broker; services call each other through it (/internal/...), no longer through the gateway."
+    },
+    {
       "key": "base_url",
       "value": "http://localhost:8080"
     },
@@ -15,6 +21,10 @@
     {
       "key": "pet_ripple",
       "value": "00000000-0000-4000-8000-0000000000b2"
+    },
+    {
+      "key": "discovery_url",
+      "value": "http://localhost:8089"
     }
   ],
   "event": [
@@ -50,7 +60,7 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "var expected = {\"Gateway health\": 200, \"Login Alice\": 200, \"Login Bob\": 200, \"[Alice] Types\": 200, \"[Alice] List mine\": 200, \"[Alice] Get Ember\": 200, \"[Bob] Foreign pet redacted\": 200, \"[Alice] Get selection\": 200, \"[Alice] Select\": 200, \"[Alice] Rename\": 200, \"[Alice] Invalid ID\": 422, \"Missing identity\": 401};",
+          "var expected = {\"Gateway health\": 200, \"Login Alice\": 200, \"Login Bob\": 200, \"[Alice] Types\": 200, \"[Alice] List mine\": 200, \"[Alice] Get Ember\": 200, \"[Bob] Foreign pet redacted\": 200, \"[Alice] Get selection\": 200, \"[Alice] Select\": 200, \"[Alice] Rename\": 200, \"[Alice] Invalid ID\": 422, \"Missing identity\": 401, \"[Lab 4] Registration carries grpc_port and battle.finished\": 200, \"[Lab 4] battle.finished has Tamagotchi as subscriber\": 200};",
           "pm.test(pm.info.requestName + ' status', function () { pm.response.to.have.status(expected[pm.info.requestName]); });",
           "if (pm.response.code !== 204) { var b = pm.response.json();",
           "pm.test('Request ID returned', function () { pm.expect(pm.response.headers.get('X-Request-ID')).to.match(/^[a-f0-9-]{36}$/); });",
@@ -166,6 +176,50 @@
         "method": "GET",
         "url": "{{base_url}}/api/v1/tamagotchis"
       }
+    },
+    {
+      "name": "[Lab 4] Registration carries grpc_port and battle.finished",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{discovery_url}}/v1/services/tamagotchi/instances"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const replicas = pm.response.json().instances;",
+              "pm.test('Tamagotchi registered with its gRPC port and the battle.finished topic', () => {",
+              "  pm.expect(replicas.length).to.be.at.least(1);",
+              "  replicas.forEach(i => { pm.expect(i.grpc_port).to.eql(9082); pm.expect(i.topics).to.eql(['battle.finished']); });",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "[Lab 4] battle.finished has Tamagotchi as subscriber",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{broker_url}}/v1/topics"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const topics = pm.response.json().topics;",
+              "const finished = topics.find(t => t.name === 'battle.finished');",
+              "pm.test('the broker delivers battle.finished to tamagotchi', () => pm.expect(finished.subscribers).to.include('tamagotchi'));"
+            ]
+          }
+        }
+      ]
     }
   ]
 }

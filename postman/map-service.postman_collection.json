@@ -24,6 +24,12 @@
   ],
   "variable": [
     {
+      "key": "broker_url",
+      "value": "http://localhost:8090",
+      "type": "string",
+      "description": "Lab 4: the message broker; services call each other through it (/internal/...), no longer through the gateway."
+    },
+    {
       "key": "base_url",
       "value": "http://localhost:8080"
     },

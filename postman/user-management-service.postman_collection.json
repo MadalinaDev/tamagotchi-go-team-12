@@ -26,6 +26,12 @@
   ],
   "variable": [
     {
+      "key": "broker_url",
+      "value": "http://localhost:8090",
+      "type": "string",
+      "description": "Lab 4: the message broker; services call each other through it (/internal/...), no longer through the gateway."
+    },
+    {
       "key": "base_url",
       "value": "http://localhost:8080"
     },
@@ -811,7 +817,7 @@
             "value": "Bearer {{map_service_token}}"
           }
         ],
-        "url": "{{base_url}}/internal/v1/users/{{user_id}}"
+        "url": "{{broker_url}}/internal/v1/users/{{user_id}}"
       }
     },
     {
@@ -836,7 +842,7 @@
             "value": "Bearer {{map_service_token}}"
           }
         ],
-        "url": "{{base_url}}/internal/v1/users/{{user_id}}/relationships"
+        "url": "{{broker_url}}/internal/v1/users/{{user_id}}/relationships"
       }
     },
     {
@@ -865,7 +871,7 @@
             "value": "application/json"
           }
         ],
-        "url": "{{base_url}}/internal/v1/users/batch",
+        "url": "{{broker_url}}/internal/v1/users/batch",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"user_ids\": [\n    \"{{user_id}}\",\n    \"{{bob_id}}\"\n  ]\n}",
@@ -907,7 +913,7 @@
             "value": "application/json"
           }
         ],
-        "url": "{{base_url}}/internal/v1/wallets/settlements",
+        "url": "{{broker_url}}/internal/v1/wallets/settlements",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"operation_id\": \"{{$guid}}\",\n  \"source_kind\": \"battle\",\n  \"source_id\": \"{{$guid}}\",\n  \"winner_id\": \"{{user_id}}\",\n  \"loser_id\": \"{{carol_id}}\",\n  \"recipient_ids\": [\n    \"{{user_id}}\"\n  ],\n  \"reward_per_recipient\": 50,\n  \"loser_penalty\": 20,\n  \"rules_version\": 1,\n  \"definition_id\": null,\n  \"definition_version\": null\n}",
@@ -948,7 +954,7 @@
             "value": "application/json"
           }
         ],
-        "url": "{{base_url}}/internal/v1/wallets/settlements",
+        "url": "{{broker_url}}/internal/v1/wallets/settlements",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"operation_id\": \"{{$guid}}\",\n  \"source_kind\": \"battle\",\n  \"source_id\": \"{{$guid}}\",\n  \"winner_id\": \"{{user_id}}\",\n  \"loser_id\": \"{{carol_id}}\",\n  \"recipient_ids\": [\n    \"{{user_id}}\"\n  ],\n  \"reward_per_recipient\": 50,\n  \"loser_penalty\": 20,\n  \"rules_version\": 1,\n  \"definition_id\": null,\n  \"definition_version\": null\n}",
@@ -990,7 +996,7 @@
             "value": "application/json"
           }
         ],
-        "url": "{{base_url}}/internal/v1/wallets/local-operations",
+        "url": "{{broker_url}}/internal/v1/wallets/local-operations",
         "body": {
           "mode": "raw",
           "raw": "{\n  \"operation_id\": \"{{$guid}}\",\n  \"package_id\": \"{{package_a}}\",\n  \"user_id\": \"{{user_id}}\",\n  \"delta\": 5,\n  \"reason\": \"daily quest\"\n}",

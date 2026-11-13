@@ -1,6 +1,6 @@
 # Lab 3 implemented contract — Vica
 
-This addendum describes **tamagotchi-guild-service:0.4.0** and **tamagotchi-notification-service:0.4.0**, the Lab 3 versions of Guild and Notification. They implement the "every service" items of the Lab 3 conventions and section 9 for both services. Everything in the [Lab 2 page](lab-2-contract-vica.md) still applies unless this page says otherwise. Two drafts of the conventions are open (CPR #55 and #56), and both services support either one (see [Service Discovery](#service-discovery-both-services)).
+This addendum describes **tamagotchi-guild-service:0.4.1** and **tamagotchi-notification-service:0.4.1**, the Lab 3 versions of Guild and Notification. They implement the "every service" items of the Lab 3 conventions and section 9 for both services. Everything in the [Lab 2 page](lab-2-contract-vica.md) still applies unless this page says otherwise. Two drafts of the conventions are open (CPR #55 and #56), and both services support either one (see [Service Discovery](#service-discovery-both-services)).
 
 Owners of affected services, please review the sections that concern you: the gateway and Service Discovery (registration, `/status`, Guild's WebSocket port), and the compose file (replicas).
 
@@ -15,7 +15,7 @@ Owners of affected services, please review the sections that concern you: the ga
     "status": "ok",
     "service": "guild",
     "instance_id": "guild-c044c34e6d11",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "started_at": "2026-10-29T13:24:33Z",
     "uptime_seconds": 42,
     "load": {"in_flight": 1, "max_concurrent": 50, "utilization": 0.02,
@@ -90,7 +90,7 @@ Owners of affected services, please review the sections that concern you: the ga
 | Chat events sent to the sockets of the same process | After the change is committed, Guild runs `SELECT pg_notify('guild_chat', <json>)`. Every replica keeps one connection with `LISTEN guild_chat` (reconnecting with backoff) and passes the events to its own sockets |
 
 - **Payloads.** They carry ids only: `{kind, guild_id, user_id?, message_id?}`, where `kind` is `message`, `member_removed` or `guild_disbanded`. The receiving replica reads the message from the database and rechecks membership before it delivers.
-- **WebSocket port.** The compose file publishes a host port range `8083-8085:8083`, so each replica (up to three) gets a host port. The gateway still hands out `ws://localhost:8083`, so sockets land on the replica bound to `8083`. REST, including `POST …/messages`, is balanced over all replicas, and every message reaches those sockets through `NOTIFY`.
+- **WebSocket port.** Guild replicas publish no host port, because replicas cannot share one and Docker does not say which replica gets which port of a range (an earlier `8083-8085:8083` range left `8083` unbound in some runs, so the gateway's `ws://localhost:8083` was refused). Instead, a small `guild-ws` service (`alpine/socat`) publishes `8083` and forwards each TCP connection to `guild-service:8083`; Docker DNS rotates the replicas. Any replica can take the socket, and every message reaches it through `NOTIFY`. Connections that cannot be served are only those that arrive while no Guild replica is running.
 - **Not done here.** The gateway does not proxy the socket. Moving `8083` behind the gateway is a gateway change, listed in [Open items](#open-items).
 
 ### Notification
@@ -106,8 +106,9 @@ Owners of affected services, please review the sections that concern you: the ga
 
 ## Compose
 
-- **Images.** `nikvnln/tamagotchi-guild-service:0.4.0` and `nikvnln/tamagotchi-notification-service:0.4.0` (+ `latest`, amd64 and arm64), published by each repository's CI on merge to `main`; tagged `v0.4.0`.
-- **Replicas.** `deploy.replicas: 2` for both. Notification stays `expose:` only; Guild publishes the port range above.
+- **Images.** `nikvnln/tamagotchi-guild-service:0.4.1` and `nikvnln/tamagotchi-notification-service:0.4.1` (+ `latest`, amd64 and arm64), published by each repository's CI on merge to `main`; tagged `v0.4.1`.
+- **0.4.1.** The discovery client opens a new connection for every call. With the real Service Discovery about every other heartbeat failed with `EOF` or `connection reset by peer`: it closes idle connections, a heartbeat can arrive just as it does, and net/http does not retry a `PUT`. On `0.4.1` the compose stack logged no `discovery.heartbeat_failed`, and both replicas of each service stayed `up` with version `0.4.1`.
+- **Replicas.** `deploy.replicas: 2` for both. Both use `expose:` only; port `8083` is published by `guild-ws` (see above), so scaling Guild never conflicts on a host port.
 - **Lab 3 settings.** Both services share the anchor `x-vica-lab3-env`:
   - `DISCOVERY_URL` defaults to `http://service-discovery:8090` and `DISCOVERY_API` to `v55`, which is draft #55.
   - With draft #56, set `DISCOVERY_URL=http://service-discovery:8089` and `DISCOVERY_API=v56` in `.env`.
@@ -127,9 +128,10 @@ Owners of affected services, please review the sections that concern you: the ga
     - tickets redeemed on another replica;
     - chat across two hubs, and real `LISTEN`/`NOTIFY` across two pools.
 - **Compose.** Run with the local `0.4.0` images, a fresh volume, and both services at 2 replicas:
-  - all four replicas were healthy, and Guild's replicas were bound to host ports `8083` and `8084`;
-  - a chat ticket from the `8084` replica opened a socket on the `8083` replica (`101`);
-  - a message sent over REST to the `8084` replica arrived on that socket as `chat.message`;
+  - all four replicas were healthy; `8083` was published by `guild-ws` only, and six `GET /status` calls through it were split 3 and 3 between the two Guild replicas;
+  - four sockets opened through `8083` landed 2 and 2 on the two replicas, and one message sent over REST reached all four as `chat.message` (`scripts/guild-chat-demo`);
+  - with one Guild replica stopped, `8083` and the chat kept working on the other;
+  - a request with a forged `X-Auth-User-Id` and no gateway secret sent to `localhost:8083` was `401`;
   - `/status` of each replica showed its own `instance_id` and version `0.4.0`;
   - the logs were JSON lines, including `chat.listening` and `discovery.register_failed` with backoff 1, 2, 4, 8 s, because no Service Discovery was running.
 - **Single image.** One Notification image was run with an unreachable `DISCOVERY_URL` and stopped with `SIGTERM`: it logged `service.stopping`, then attempted deregistration (`discovery.deregister_failed`), then exited.
@@ -139,5 +141,5 @@ Owners of affected services, please review the sections that concern you: the ga
 | Item | Depends on |
 | --- | --- |
 | End-to-end registration, round robin and eviction with the real Service Discovery | The `service-discovery` repository and image, and the choice between #55 and #56 |
-| Gateway proxies Guild's WebSocket, so that `8083` is no longer published | Gateway owner |
+| Gateway proxies Guild's WebSocket, so that the `guild-ws` helper is no longer needed | Gateway owner |
 | `SKIP LOCKED` claiming of push retries | Real FCM delivery with retries (later lab) |
