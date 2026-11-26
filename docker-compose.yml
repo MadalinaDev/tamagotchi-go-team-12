@@ -619,7 +619,10 @@ services:
     # ServiceEndpoint on 9087, creates and cancels raids from the topics
     # raid.activation-requested / raid.cancellation-requested and publishes
     # raid.started / raid.finished.
-    image: sabinapopescu/tamagotchi-monster-raid-service:0.5.0
+    # 0.6.0 (Lab 5, docs/lab-5-contract-sabina.md): during a database failover it
+    # answers 503 DEPENDENCY_UNAVAILABLE + Retry-After instead of 500 or 504, and
+    # its LISTEN connection follows the new leader within 2 s.
+    image: sabinapopescu/tamagotchi-monster-raid-service:0.6.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     deploy:
@@ -662,7 +665,9 @@ services:
     # Guild with gRPC Broker.Call, serves a gRPC ServiceEndpoint on 9088 and
     # publishes raid.activation-requested / raid.cancellation-requested from a
     # transactional outbox.
-    image: sabinapopescu/tamagotchi-package-registry-service:0.5.0
+    # 0.6.0 (Lab 5, docs/lab-5-contract-sabina.md): during a database failover it
+    # answers 503 DEPENDENCY_UNAVAILABLE + Retry-After instead of 500 or 504.
+    image: sabinapopescu/tamagotchi-package-registry-service:0.6.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     deploy:
