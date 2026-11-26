@@ -31,3 +31,6 @@
 [submodule "services/message-broker"]
 	path = services/message-broker
 	url = https://github.com/MadalinaDev/message-broker.git
+[submodule "services/etl-service"]
+	path = services/etl-service
+	url = https://github.com/MadalinaDev/etl-service.git
