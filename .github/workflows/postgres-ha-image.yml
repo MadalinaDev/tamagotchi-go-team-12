@@ -1,0 +1,42 @@
+name: Publish the database image
+
+# Lab 5 (grade 5): Postgres 16 + PostGIS + Patroni, the image of pg-1, pg-2 and pg-3. It lives in
+# this repository (db/ha) because no service owns it. Merges to main that change it publish
+# madalina060504/tamagotchi-postgres-ha:<db/ha/VERSION> and :latest; it can also be run by hand.
+# Needs the DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets.
+on:
+  push:
+    branches: [main]
+    paths: ['db/**', '.github/workflows/postgres-ha-image.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: madalina060504/tamagotchi-postgres-ha
+
+jobs:
+  publish:
+    name: Build and push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read the version
+        id: version
+        run: echo "version=$(cat db/ha/VERSION)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: db
+          file: db/ha/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE }}:latest

@@ -1,0 +1,69 @@
+# Patroni settings shared by pg-1, pg-2 and pg-3. The node name, the addresses and the
+# passwords come from the environment (entrypoint.sh).
+scope: tamagotchi-go
+namespace: /patroni/
+
+restapi:
+  # GET /primary, /replica, /health, /cluster and /metrics (HAProxy and Prometheus use them)
+  # need no login. Everything that changes the cluster (POST /switchover, PATCH /config, ...)
+  # needs PATRONI_RESTAPI_USERNAME / PATRONI_RESTAPI_PASSWORD (from the environment).
+  listen: 0.0.0.0:8008
+
+etcd3:
+  hosts: etcd:2379
+
+bootstrap:
+  dcs:
+    # The leader renews its lock every loop_wait seconds; when it has not for ttl seconds
+    # (it crashed), the synchronous replica is promoted: 20 s is Patroni's minimum. A leader
+    # that is stopped releases the lock at once, so a planned switchover takes a second or two.
+    # (Patroni also needs loop_wait + 2 * retry_timeout <= ttl.)
+    ttl: 20
+    loop_wait: 2
+    retry_timeout: 4
+    # A replica further behind than 1 MB is never promoted (no silent data loss).
+    maximum_lag_on_failover: 1048576
+    # One replica confirms every commit before the client gets its answer; if no replica
+    # is left, the leader keeps accepting writes alone (not strict).
+    synchronous_mode: true
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+        max_connections: 300
+        wal_level: replica
+        hot_standby: "on"
+        max_wal_senders: 10
+        max_replication_slots: 10
+        wal_keep_size: 256MB
+        wal_log_hints: "on"
+        password_encryption: scram-sha-256
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+    - auth-host: scram-sha-256
+    - auth-local: trust
+  pg_hba:
+    - local all all trust
+    - host replication replicator 0.0.0.0/0 scram-sha-256
+    - host all all 0.0.0.0/0 scram-sha-256
+  # Runs once, on the first leader: the team's databases, owners and the ETL reader.
+  post_bootstrap: /usr/local/bin/post-bootstrap.sh
+
+postgresql:
+  listen: 0.0.0.0:5432
+  data_dir: /var/lib/postgresql/data/pgdata
+  bin_dir: /usr/lib/postgresql/16/bin
+  pgpass: /tmp/pgpass0
+  parameters:
+    unix_socket_directories: /var/run/postgresql
+  create_replica_methods:
+    - basebackup
+  basebackup:
+    checkpoint: fast
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false
+  nosync: false
