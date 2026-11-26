@@ -7,8 +7,9 @@
 #   cp .env.example .env     # set the passwords, tokens and secrets (letters, digits and underscores)
 #   docker compose up -d --wait
 #
-# Postgres runs the scripts in ./db/init only on an empty volume. To start
-# from scratch (drops all data): docker compose down -v
+# The databases run on a Patroni cluster (Lab 5): the leader runs the scripts in
+# ./db/init once, when the cluster is created. To start from scratch (drops all
+# data): docker compose down -v
 #
 # Ports, image names and database names follow docs/lab-1-conventions
 # (sections 2-4 and 10); the Lab 2 routing, auth and limits follow
@@ -46,14 +47,55 @@ x-lab3-env: &lab3-env
   DB_POOL_SIZE: "5"
   LOG_LEVEL: INFO
 
+# Lab 5 (grades 6-7): the sharded cache the gateway and the broker share. Both place a key
+# with the same consistent-hash ring over these names, so the list must be the same for both.
+x-cache-env: &cache-env
+  CACHE_NODES: cache-1:6379,cache-2:6379,cache-3:6379
+
 services:
-  postgres:
-    # PostGIS is needed only by map-service; the same image serves all DBs.
-    image: postgis/postgis:16-3.4
-    environment:
-      POSTGRES_USER: postgres
+  # Lab 5 (grade 5, docs/lab-5-conventions.md section 2): the databases run on a Patroni
+  # cluster: pg-1, pg-2 and pg-3 (one leader, two streaming replicas, one of them
+  # synchronous). Patroni keeps the leader lock in etcd and promotes a replica within
+  # seconds when the leader fails; the old leader rejoins as a replica (pg_rewind).
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.17
+    command:
+      - etcd
+      - --name=etcd-1
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd:2380
+      - --initial-cluster=etcd-1=http://etcd:2380
+      - --initial-cluster-state=new
+    volumes:
+      - etcd-data:/etcd-data
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  pg-1: &pg-node
+    # Postgres 16 + PostGIS + Patroni, built from db/ha in this repository.
+    image: madalina060504/tamagotchi-postgres-ha:0.6.0
+    # Time for Patroni to stop Postgres cleanly and hand the leader lock to a replica.
+    stop_grace_period: 30s
+    depends_on:
+      etcd:
+        condition: service_healthy
+    environment: &pg-env
+      PATRONI_NAME: pg-1
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      # Read by db/init/01-create-databases.sh to create one user per service.
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:?set REPLICATION_PASSWORD in .env}
+      # Patroni's REST API: reading it is open (HAProxy, Prometheus, GET /cluster); changing
+      # the cluster (switchover, restart, configuration) needs this login.
+      PATRONI_RESTAPI_USERNAME: patroni
+      PATRONI_RESTAPI_PASSWORD: ${PATRONI_API_PASSWORD:?set PATRONI_API_PASSWORD in .env}
+      # Read by the bootstrap (db/init/01-create-databases.sh): one user per service,
+      # plus the read-only ETL user (grade 4).
       BATTLE_DB_PASSWORD: ${BATTLE_DB_PASSWORD:?set BATTLE_DB_PASSWORD in .env}
       TAMAGOTCHI_DB_PASSWORD: ${TAMAGOTCHI_DB_PASSWORD:?set TAMAGOTCHI_DB_PASSWORD in .env}
       GUILD_DB_PASSWORD: ${GUILD_DB_PASSWORD:?set GUILD_DB_PASSWORD in .env}
@@ -62,21 +104,136 @@ services:
       MAP_DB_PASSWORD: ${MAP_DB_PASSWORD:?set MAP_DB_PASSWORD in .env}
       RAID_DB_PASSWORD: ${RAID_DB_PASSWORD:?set RAID_DB_PASSWORD in .env}
       REGISTRY_DB_PASSWORD: ${REGISTRY_DB_PASSWORD:?set REGISTRY_DB_PASSWORD in .env}
+      ETL_DB_PASSWORD: ${ETL_DB_PASSWORD:?set ETL_DB_PASSWORD in .env}
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - pg1-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  pg-2:
+    <<: *pg-node
+    environment:
+      <<: *pg-env
+      PATRONI_NAME: pg-2
+    volumes:
+      - pg2-data:/var/lib/postgresql/data
+
+  pg-3:
+    <<: *pg-node
+    environment:
+      <<: *pg-env
+      PATRONI_NAME: pg-3
+    volumes:
+      - pg3-data:/var/lib/postgresql/data
+
+  postgres:
+    # The database router keeps the old hostname, so every service still connects to
+    # postgres:5432 and reaches the current leader; 5433 serves the replicas (read-only).
+    # Status page: http://localhost:7000. Cluster: http://localhost:8008/cluster.
+    image: haproxy:3.0.5-alpine
+    depends_on:
+      - pg-1
+      - pg-2
+      - pg-3
+    volumes:
+      - ./db/ha/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     ports:
       # Published so services can also be run locally with DB_HOST=localhost.
       - "${POSTGRES_HOST_PORT:-5432}:5432"
-    # Replicas multiply the connection pools; each one is capped by DB_POOL_SIZE.
-    command: ["postgres", "-c", "max_connections=300"]
+      - "5433:5433"
+      - "7000:7000"
+      - "8008:8008"
     healthcheck:
-      # TCP check: during init Postgres listens only on the Unix socket, so
-      # this turns healthy only after the init scripts have finished.
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres"]
-      interval: 5s
+      # Healthy once a leader accepts connections, so the services start after the
+      # bootstrap created their databases.
+      test: ["CMD-SHELL", "wget -qO- 'http://127.0.0.1:7000/;csv' | grep -E '^primary,pg-[0-9]+,' | grep -q ',UP,'"]
+      interval: 3s
       timeout: 3s
-      retries: 20
+      retries: 60
+    restart: unless-stopped
+
+  # Lab 5 (grades 6-7, docs/lab-5-conventions.md section 3): three Redis nodes, sharded by
+  # consistent hashing in the gateway and the broker (not Redis Cluster). Pure caches: no
+  # persistence, least-recently-used eviction at 64 MB. When a node fails, its keys go to the
+  # next node on the ring for 10 s; every other key stays where it is.
+  cache-1: &cache-node
+    image: redis:7.4.1-alpine
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 64mb
+      - --maxmemory-policy
+      - allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+    expose:
+      - "6379"
+    restart: unless-stopped
+
+  cache-2:
+    <<: *cache-node
+
+  cache-3:
+    <<: *cache-node
+
+  # Lab 5 (grade 4): the data warehouse, a star schema (schema dw) in a Postgres of its own,
+  # loaded by etl-service. Grafana reads it as dw_reader (db/warehouse/01-reader.sh).
+  warehouse:
+    image: postgres:16.14-alpine
+    environment:
+      POSTGRES_DB: warehouse
+      POSTGRES_USER: warehouse
+      POSTGRES_PASSWORD: ${WAREHOUSE_DB_PASSWORD:?set WAREHOUSE_DB_PASSWORD in .env}
+      WAREHOUSE_READER_PASSWORD: ${WAREHOUSE_READER_PASSWORD:?set WAREHOUSE_READER_PASSWORD in .env}
+    volumes:
+      - warehouse-data:/var/lib/postgresql/data
+      - ./db/warehouse:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Published for the demo: psql -h localhost -p 5434 -U warehouse warehouse
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U warehouse -d warehouse"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  etl-service:
+    # Lab 5 (grade 4): reads every team database from the replicas (postgres:5433, as the
+    # read-only etl_reader; the leader only when no replica answers), builds the star schema
+    # and loads the warehouse every ETL_INTERVAL_SECONDS. MadalinaDev/etl-service.
+    image: madalina060504/tamagotchi-etl-service:0.6.0
+    # Published for amd64 only; runs emulated on Apple Silicon.
+    platform: linux/amd64
+    depends_on:
+      postgres:
+        condition: service_healthy
+      warehouse:
+        condition: service_healthy
+    environment:
+      PORT: "8091"
+      SOURCE_DB_HOST: postgres
+      SOURCE_DB_PORT: "5433"
+      SOURCE_DB_FALLBACK_PORT: "5432"
+      SOURCE_DB_USER: etl_reader
+      SOURCE_DB_PASSWORD: ${ETL_DB_PASSWORD:?set ETL_DB_PASSWORD in .env}
+      WAREHOUSE_DB_HOST: warehouse
+      WAREHOUSE_DB_NAME: warehouse
+      WAREHOUSE_DB_USER: warehouse
+      WAREHOUSE_DB_PASSWORD: ${WAREHOUSE_DB_PASSWORD:?set WAREHOUSE_DB_PASSWORD in .env}
+      ETL_INTERVAL_SECONDS: "60"
+      # Operator token: POST /v1/runs and GET /v1/reports. Empty = both disabled.
+      ETL_ADMIN_TOKEN: ${ETL_ADMIN_TOKEN:-}
+      LOG_LEVEL: INFO
+    ports:
+      # Published for the demo: GET /v1/runs, /v1/warehouse, /v1/reports, /metrics.
+      - "8091:8091"
     restart: unless-stopped
 
   service-discovery:
@@ -107,13 +264,22 @@ services:
     # (port 50051), durable topic queues with a dead-letter channel in SQLite
     # (volume broker-data), load-based balancing, a breaker per replica and
     # rerouting. Thread-per-request. MadalinaDev/message-broker.
-    image: madalina060504/tamagotchi-message-broker:0.5.0
+    # 0.6.0 (Lab 5): coordinates the account-deletion saga (POST /v1/sagas, its state in
+    # SQLite, compensations) and caches user lookups between services in the shared cache.
+    image: madalina060504/tamagotchi-message-broker:0.6.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     depends_on:
       service-discovery:
         condition: service_started
+      cache-1:
+        condition: service_started
+      cache-2:
+        condition: service_started
+      cache-3:
+        condition: service_started
     environment:
+      <<: *cache-env
       PORT: "8090"
       GRPC_PORT: "50051"
       GATEWAY_SECRET: ${GATEWAY_SECRET:?set GATEWAY_SECRET in .env}
@@ -145,7 +311,10 @@ services:
     # (load balancing and breakers moved to the broker); no /internal routes;
     # GET /metrics; admins download every container's logs from Loki at
     # GET /api/v1/admin/logs.
-    image: madalina060504/tamagotchi-gateway-service:0.5.0
+    # 0.6.0 (Lab 5): caches common GETs and verified tokens in the sharded cache
+    # (consistent hashing, GET /api/v1/admin/cache), and starts the account-deletion
+    # saga at DELETE /api/v1/users/me.
+    image: madalina060504/tamagotchi-gateway-service:0.6.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     depends_on:
@@ -155,7 +324,14 @@ services:
         condition: service_started
       message-broker:
         condition: service_healthy
+      cache-1:
+        condition: service_started
+      cache-2:
+        condition: service_started
+      cache-3:
+        condition: service_started
     environment:
+      <<: *cache-env
       PORT: "8080"
       BROKER_URL: http://message-broker:8090
       LOKI_URL: http://loki:3100
@@ -360,7 +536,9 @@ services:
     # 0.5.0 (Lab 4, docs/lab-4-contract-madalina.md): calls Package Registry
     # with gRPC Broker.Call, serves a gRPC ServiceEndpoint on 9085 and publishes
     # its outbox on the broker's topics (user.registered, friend.*, enemy.*).
-    image: madalina060504/tamagotchi-user-management-service:0.5.0
+    # 0.6.0 (Lab 5): account status; deactivate, reactivate and erase, the steps of the
+    # account-deletion saga the broker coordinates.
+    image: madalina060504/tamagotchi-user-management-service:0.6.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     deploy:
@@ -399,7 +577,8 @@ services:
     # 0.5.0 (Lab 4, docs/lab-4-contract-madalina.md): calls User Management with
     # gRPC Broker.Call, serves a gRPC ServiceEndpoint on 9086, publishes users.nearby
     # and subscribes to friend.removed and enemy.unmarked.
-    image: madalina060504/tamagotchi-map-service:0.5.0
+    # 0.6.0 (Lab 5): hide, unhide and purge, its steps of the account-deletion saga.
+    image: madalina060504/tamagotchi-map-service:0.6.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     deploy:
@@ -557,6 +736,8 @@ services:
     image: grafana/grafana:11.4.0
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # Lab 5: the Warehouse data source logs in as the read-only dw_reader.
+      WAREHOUSE_READER_PASSWORD: ${WAREHOUSE_READER_PASSWORD:?set WAREHOUSE_READER_PASSWORD in .env}
       # The demo dashboard is readable without logging in.
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
@@ -567,11 +748,17 @@ services:
     depends_on:
       - prometheus
       - loki
+      - warehouse
     ports:
       - "3000:3000"
     restart: unless-stopped
 
 volumes:
-  pgdata:
+  # Lab 5: pgdata (the single Postgres of Labs 1-4) is no longer used.
+  etcd-data:
+  pg1-data:
+  pg2-data:
+  pg3-data:
+  warehouse-data:
   broker-data:
   alloy-data:

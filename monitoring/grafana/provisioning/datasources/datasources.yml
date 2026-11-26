@@ -11,3 +11,17 @@ datasources:
     type: loki
     access: proxy
     url: http://loki:3100
+  # Lab 5: the data warehouse (star schema dw), read-only.
+  - name: Warehouse
+    uid: warehouse
+    type: grafana-postgresql-datasource
+    access: proxy
+    url: warehouse:5432
+    user: dw_reader
+    jsonData:
+      database: warehouse
+      sslmode: disable
+      postgresVersion: 1600
+      maxOpenConns: 5
+    secureJsonData:
+      password: $WAREHOUSE_READER_PASSWORD

@@ -29,13 +29,23 @@ jobs:
       REGISTRY_SERVICE_TOKEN: ci_tok_registry_${{ github.run_id }}
       DISCOVERY_TOKEN: ci_tok_discovery_${{ github.run_id }}
       BROKER_ADMIN_TOKEN: ci_broker_admin_${{ github.run_id }}
+      # Lab 5: the Patroni cluster, the warehouse and the ETL service.
+      REPLICATION_PASSWORD: ci_replication_${{ github.run_id }}
+      PATRONI_API_PASSWORD: ci_patroni_${{ github.run_id }}
+      ETL_DB_PASSWORD: ci_etl_${{ github.run_id }}
+      WAREHOUSE_DB_PASSWORD: ci_warehouse_${{ github.run_id }}
+      WAREHOUSE_READER_PASSWORD: ci_dw_reader_${{ github.run_id }}
+      ETL_ADMIN_TOKEN: ci_etl_admin_${{ github.run_id }}
       COMPOSE_PROJECT_NAME: pad-lab1-ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: docker compose pull && docker compose up -d --wait
+      # Lab 5: the database image (Postgres + PostGIS + Patroni) is built from this pull
+      # request's db/ha, so the smoke test checks it; every other image is pulled.
+      - run: docker build -f db/ha/Dockerfile -t "madalina060504/tamagotchi-postgres-ha:$(cat db/ha/VERSION)" db
+      - run: docker compose up -d --wait --pull missing
       - run: curl --fail http://localhost:8080/health
       - run: npx --yes newman@6.2.1 run postman/battle-service.postman_collection.json --bail
       - run: npx --yes newman@6.2.1 run postman/tamagotchi-service.postman_collection.json --bail
@@ -63,5 +73,9 @@ jobs:
           fi
       # Lab 4: logs download, broker queues, topics, gRPC, dead letters, monitoring.
       - run: npx --yes newman@6.2.1 run postman/lab-4-broker.postman_collection.json --bail --env-var "broker_admin_token=$BROKER_ADMIN_TOKEN" --env-var "map_service_token=$MAP_SERVICE_TOKEN"
+      # Lab 5: warehouse and ETL, replication, the sharded cache, consistent hashing, the saga.
+      - run: npx --yes newman@6.2.1 run postman/lab-5.postman_collection.json --bail --env-var "etl_admin_token=$ETL_ADMIN_TOKEN" --env-var "broker_admin_token=$BROKER_ADMIN_TOKEN" --env-var "map_service_token=$MAP_SERVICE_TOKEN"
+      # Lab 5: crash the database leader; a replica takes over and nothing committed is lost.
+      - run: sh .github/smoke/failover.sh
       - if: always()
         run: docker compose logs && docker compose down -v

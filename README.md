@@ -2,7 +2,7 @@
 
 Lab 0 plans a microservice backend where independently developed pet-care apps share users, creatures, battles, guilds and raids. Each app (a **package**) can define its own care statistics; global services provide interoperability without forcing all packages to use the same hunger/happiness model.
 
-**Status:** architecture and communication-contract proposal for implementation in later labs. The service allocation and technology split below are confirmed; the concrete gameplay constants and API design are the initial baseline for team review. **Lab 1:** all eight services are implemented, published on Docker Hub and started together by [docker-compose.yml](docker-compose.yml). See [Lab 1 — Running the whole system](#lab-1--running-the-whole-system) for the images, requirements, run steps and contract updates. **Lab 4:** a message broker now sits between the gateway and the services and between the services themselves; see [Lab 4 — Message broker](#lab-4--message-broker) and the [architecture](#architecture).
+**Status:** architecture and communication-contract proposal for implementation in later labs. The service allocation and technology split below are confirmed; the concrete gameplay constants and API design are the initial baseline for team review. **Lab 1:** all eight services are implemented, published on Docker Hub and started together by [docker-compose.yml](docker-compose.yml). See [Lab 1 — Running the whole system](#lab-1--running-the-whole-system) for the images, requirements, run steps and contract updates. **Lab 4:** a message broker now sits between the gateway and the services and between the services themselves; see [Lab 4 — Message broker](#lab-4--message-broker) and the [architecture](#architecture). **Lab 5:** the databases run on a replicated Patroni cluster with automatic failover, the gateway and the broker share a sharded cache (consistent hashing), an ETL service loads a data warehouse, and account deletion is a saga coordinated by the broker; see [Lab 5 — Sharding and replication](#lab-5--sharding-and-replication).
 
 ## Contents
 
@@ -12,6 +12,7 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 - [Communication contract](#communication-contract)
 - [Game rules and cross-service operations](#game-rules-and-cross-service-operations)
 - [Contribution workflow](#contribution-workflow)
+- [Lab 5 — Sharding and replication](#lab-5--sharding-and-replication)
 - [Lab 4 — Message broker](#lab-4--message-broker)
 - [Lab 3 — Scaling up](#lab-3--scaling-up)
 - [Lab 3 — Service Discovery, Gateway, User Management and Map](#lab-3--service-discovery-gateway-user-management-and-map)
@@ -47,34 +48,61 @@ Lab 0 plans a microservice backend where independently developed pet-care apps s
 
 Since Lab 4 the **API Gateway** is still the single entry point for clients, but it no longer calls the services itself: it hands every request to the **Message Broker**, naming the service that owns the path. The broker queues it for that service, picks the least-loaded replica and reroutes failed attempts. Services call each other through the broker too (HTTP on the `/internal/...` paths or gRPC `Broker.Call`), and fire events on **topics** without knowing who listens. Every replica registers with **Service Discovery** (its gRPC port and the topics it subscribes to), which the broker reads. Guild's chat WebSocket remains the one direct connection.
 
+Since Lab 5:
+
+- **Databases:** the services' databases live on a **Patroni cluster** (one leader, two streaming replicas, the leader lock in etcd). They reach it through the router `postgres`, which always forwards to the current leader.
+- **Cache:** the gateway and the broker share a **cache of three Redis nodes**, sharded by consistent hashing.
+- **Warehouse:** an **ETL service** copies every database, from a replica, into a **data warehouse** that Grafana reads.
+- **Account deletion:** a **saga** the broker coordinates.
+
 ```mermaid
 flowchart LR
     C["Clients<br/>package apps, Postman"]
-    GW["API Gateway · Python · :8080<br/>JWT check via JWKS · 5 s timeout<br/>50 concurrent tasks · no /internal routes<br/>admin log download"]
-    MB["Message Broker · Python<br/>:8090 HTTP · :50051 gRPC · thread per request<br/>queue per service · topics<br/>least-loaded routing · breaker per replica<br/>durable queues + dead letters (SQLite)"]
-    SD["Service Discovery · Python · :8089<br/>registry (grpc_port, topics)<br/>/status polls · alerts → Telegram/Discord"]
-    WS["Guild chat WebSocket<br/>:8083 · direct"]
+    GW["API Gateway · Python · :8080<br/>JWT check via JWKS · 5 s timeout<br/>50 concurrent tasks · no /internal routes<br/>admin log download · response cache"]
+    MB["Message Broker · Python<br/>:8090 HTTP · :50051 gRPC · thread per request<br/>queue per service · topics<br/>least-loaded routing · breaker per replica<br/>saga coordinator"]
+    BD[("broker-data · SQLite<br/>durable queues, dead letters, sagas")]
+    SD["Service Discovery · Python · :8089<br/>registry (grpc_port, topics)<br/>/status polls"]
+    AL["Telegram · Discord<br/>alerts"]
+    WS["guild-ws · socat · :8083<br/>Guild chat WebSocket, direct"]
+    CA[("Cache · Redis × 3<br/>consistent hashing, 160 vnodes<br/>answers · tokens · lookups")]
 
     subgraph SVC["Services · 2 replicas each · Docker network only"]
         GOS["Go<br/>Battle :8081 · Tamagotchi :8082<br/>Guild :8083 · Notification :8084"]
         NEST["NestJS + Prisma<br/>User Management :8085 (gRPC :9085)<br/>Map :8086 (gRPC :9086)<br/>Monster Raid :8087 · Package Registry :8088"]
     end
 
-    DB[("PostgreSQL + PostGIS<br/>one database per service")]
+    RT["postgres · HAProxy router<br/>:5432 → leader · :5433 → replicas"]
+    subgraph CL["Database cluster · Patroni"]
+        PG[("pg-1 · pg-2 · pg-3<br/>Postgres 16 + PostGIS<br/>1 leader + 2 replicas (1 synchronous)<br/>one database per service")]
+        ET["etcd<br/>leader lock"]
+    end
+    ETL["ETL service · Python · :8091<br/>every 60 s"]
+    DW[("Data warehouse<br/>Postgres · star schema dw")]
     MON["Monitoring<br/>Prometheus :9090 · Loki :3100<br/>Alloy (container logs) · Grafana :3000"]
     F["Firebase Cloud Messaging"]
 
     C -->|"① REST + Bearer JWT"| GW
     GW -->|"② queue of the service<br/>/v1/queues/{service}/…<br/>X-Auth-*, X-Gateway-Secret"| MB
-    MB -->|"③ least-loaded replica<br/>HTTP · gRPC ServiceEndpoint"| SVC
+    MB -->|"③ least-loaded replica<br/>HTTP · gRPC ServiceEndpoint<br/>saga steps"| SVC
     SVC -->|"④ calls: gRPC Broker.Call or<br/>HTTP /internal/… + service token<br/>⑤ events: Publish(topic)"| MB
+    MB --- BD
+    GW -.->|"cached GETs, tokens"| CA
+    MB -.->|"user lookups, gen:*, revocations"| CA
     MB -.->|"replicas, topics · evictions"| SD
     SVC -.->|"register, heartbeat · /status polled"| SD
+    SD -.-> AL
     C <==>|"⑥ chat socket, URL<br/>negotiated by the gateway"| WS
-    SVC --- DB
+    WS <==> SVC
+    SVC -->|"own database"| RT
+    RT --> PG
+    PG -.- ET
+    ETL -->|"5433, read-only"| RT
+    ETL -->|"load"| DW
     SVC -->|"Notification push"| F
     MON -.->|"scrape /metrics · collect logs"| MB
     MON -.-> SD
+    MON -.->|"Patroni, ETL metrics"| PG
+    MON -.->|"SQL panels"| DW
     GW -.->|"log download"| MON
 ```
 
@@ -108,9 +136,48 @@ sequenceDiagram
     M-->>MB: OK, pair re-armed (or INVALID_ARGUMENT: dead-letter channel)
 ```
 
-- **Databases:** every service has its **own PostgreSQL database and credentials** on one local Postgres server (PostGIS for Map). Tables and credentials stay isolated; services never read another service's database.
+**System map: every container and how they talk.** Each service's two replicas are drawn as one box. The arrows are real traffic, taken from `docker-compose.yml`, this contract and the message broker's logs of 13 November 2026; the Lab 5 components (the cache, the database router, the Patroni cluster and etcd, the ETL service and the warehouse) were added on 26 November 2026 by [docs/diagrams/lab5_system_map.py](docs/diagrams/lab5_system_map.py).
+
+![System map of Tamagotchi Go: clients reach the API Gateway, which hands every request to the Message Broker; the broker routes to the 8 services, which call each other and exchange events through it; the gateway and the broker share a three-node cache; the services reach their databases on a Patroni cluster through the router postgres; the ETL service loads the data warehouse; Service Discovery and the monitoring stack sit around them](docs/diagrams/system-map.svg)
+
+<details>
+<summary>The same map, one kind of traffic at a time</summary>
+
+**A user request.** The client calls the gateway, which puts the request in the broker's queue for the service that owns the path. The broker hands it to the least-loaded replica and reroutes it to the other replica if an attempt fails. Guild's chat socket is the one direct connection.
+
+![A user request: client, API Gateway, the broker's queue of the service, the least-loaded replica](docs/diagrams/system-map-request.svg)
+
+**Calls between services (gRPC).** Each arrow goes from caller to callee. Physically every call goes caller → broker (`Broker.Call`) → callee (`ServiceEndpoint.Handle`).
+
+![gRPC calls between services, all through the message broker](docs/diagrams/system-map-grpc.svg)
+
+**Events (topics).** Each arrow goes from publisher to subscriber and is labelled with the topic. The broker stores an event in `broker-data` before it delivers it, at least once.
+
+![Topic events from publishers to subscribers, stored by the broker before delivery](docs/diagrams/system-map-events.svg)
+
+**Discovery and alerts.** Every replica registers and sends a heartbeat every 5 s, and Service Discovery polls each `/status`. The broker reads replicas and topics from it and evicts broken replicas. Alerts go to Telegram and Discord.
+
+![Service Discovery: registration, heartbeats, status polls, evictions and alerts](docs/diagrams/system-map-discovery.svg)
+
+**Data and monitoring.** Each service has its own database on the Patroni cluster. Prometheus scrapes the broker, the gateway, Service Discovery, the Patroni nodes and the ETL service. Alloy ships every container's logs to Loki, and Grafana shows them, the metrics and the warehouse.
+
+![Data and monitoring: the database cluster, the broker's SQLite store, the warehouse, Prometheus, Loki, Alloy and Grafana](docs/diagrams/system-map-monitoring.svg)
+
+**The cache (Lab 5).** The gateway caches common GETs and verified tokens, and the broker caches user lookups between services. Both place every key on one of three Redis nodes by consistent hashing.
+
+![The sharded cache: the API Gateway and the Message Broker use three Redis nodes](docs/diagrams/system-map-cache.svg)
+
+**Replication and the warehouse (Lab 5).** The services connect to `postgres`, a router to the Patroni cluster's leader; two replicas stream every change and etcd holds the leader lock. The ETL service reads every database from a replica and loads the warehouse, which Grafana reads.
+
+![Replication and the warehouse: the router, the Patroni cluster and etcd, the ETL service and the data warehouse](docs/diagrams/system-map-replication.svg)
+
+</details>
+
+An interactive version is in [`docs/diagrams/system-map.html`](docs/diagrams/system-map.html). Open it in a browser after cloning: click a container to see its details and connections, or switch between the views.
+
+- **Databases:** every service has its **own PostgreSQL database and credentials** (PostGIS for Map). Tables and credentials stay isolated; services never read another service's database. Since Lab 5 the server is a three-node Patroni cluster behind the router `postgres`; only the ETL service reads every database, from a replica, as the read-only `etl_reader`.
 - **Not drawn as separate arrows:** the gateway reads User Management's JWKS to verify tokens (through the broker's `user-management` queue), and Monster Raid's live HP (SSE) is streamed through the gateway and the broker like any other response.
-- **Ports:** only the gateway's 8080 is published for REST, plus Guild's 8083 for the direct WebSocket. All other service ports are `expose:` only. For the demo, the broker (8090), Service Discovery (8089), Prometheus (9090), Loki (3100) and Grafana (3000) are published too.
+- **Ports:** only the gateway's 8080 is published for REST, plus Guild's 8083 for the direct WebSocket. All other service ports are `expose:` only. For the demo, the broker (8090), Service Discovery (8089), Prometheus (9090), Loki (3100) and Grafana (3000) are published too, and since Lab 5 the database router (5432 leader, 5433 replicas, 7000 status page, 8008 Patroni API), the warehouse (5434) and the ETL service (8091).
 - **Header trust:**
   - The gateway strips every client-supplied `Authorization`, `X-Auth-*`, `X-Service-*` and `X-Gateway-*` header, and injects its own plus `X-Gateway-Secret`.
   - Services trust identity headers only next to that secret, so a forged `X-Auth-User-Id` sent straight to Guild's public port is rejected.
@@ -579,6 +646,85 @@ This section defines the team policy. **Documented rules are not proof that GitH
 - Keep secrets, `.env`, Firebase service-account keys and dependencies out of Git. Use placeholders in `.env.example`. Individual repos must apply their own `.gitignore` because the parent repo's ignore file does not govern submodule contents.
 
 Private repos admit the professor(s), not teammates, as required by the lab. Peer review of shared contracts happens in this public repo; the private owner applies the agreed contract in their own README. Do not require an unavailable teammate approval in private repo settings.
+
+## Lab 5 — Sharding and replication
+
+Lab 5 adds the data layer. The team contract is [docs/lab-5-conventions.md](docs/lab-5-conventions.md). The endpoints, data formats and verification of Mădălina's parts are in [docs/lab-5-contract-madalina.md](docs/lab-5-contract-madalina.md), and the walk-through for the demo is [docs/lab-5-demo.md](docs/lab-5-demo.md).
+
+| Grade | What | Where |
+| --- | --- | --- |
+| 2–3 | The architecture diagram and system map show the forgotten components and the cache, the data warehouse and the ETL service | [Architecture](#architecture), [system map](docs/diagrams/system-map.html) |
+| 4 | A data warehouse (Postgres, star schema `dw`) and an ETL service that loads it from every database every 60 s | `warehouse`, [MadalinaDev/etl-service](https://github.com/MadalinaDev/etl-service) |
+| 5 | Replication with automatic failover: Patroni, one leader and two replicas (one synchronous), etcd, and the router `postgres` | [db/ha](db/ha), [conventions §3](docs/lab-5-conventions.md#3-the-database-cluster-replication-and-failover-grade-5) |
+| 6 | Cache: common GETs, verified tokens and JWKS in the gateway, user lookups in the broker | [conventions §4](docs/lab-5-conventions.md#4-the-cache-grades-6-and-7) |
+| 7 | Three Redis nodes sharded by consistent hashing; research and comparison with Redis Cluster | [docs/lab-5-consistent-hashing.md](docs/lab-5-consistent-hashing.md) |
+| 8–9 | Account deletion as a saga coordinated by the message broker, with compensations, instead of 2PC | [conventions §6](docs/lab-5-conventions.md#6-distributed-transactions-the-account-deletion-saga-grades-8-and-9) |
+| 10 | Postman, diagrams, Docker Hub `0.6.0`, and the endpoints and data formats below | [postman/lab-5.postman_collection.json](postman/lab-5.postman_collection.json) |
+
+**What runs (new in Compose):**
+
+- **The database cluster:**
+  - `etcd`;
+  - `pg-1`, `pg-2`, `pg-3` (`madalina060504/tamagotchi-postgres-ha:0.6.0`);
+  - the router `postgres` (HAProxy: 5432 leader, 5433 replicas, 7000 stats, 8008 Patroni API).
+- **The cache:** `cache-1`, `cache-2`, `cache-3` (Redis 7.4).
+- **The warehouse:** `warehouse` (Postgres 16, port 5434).
+- **The ETL service:** `etl-service` (`madalina060504/tamagotchi-etl-service:0.6.0`, port 8091).
+- **New versions:** the gateway, the message broker, User Management and Map are `0.6.0`. The other images are unchanged.
+
+**New endpoints** (formats in the [contract](docs/lab-5-contract-madalina.md)):
+
+| Service | Method and path | Who | What |
+| --- | --- | --- | --- |
+| Gateway | `DELETE /api/v1/users/me` | user | Starts the account-deletion saga: `202` Saga, `Location: /api/v1/sagas/{id}` |
+| Gateway | `GET /api/v1/sagas/{id}` | the subject or an admin | Saga: status, current step, every step's status, attempts, replica, error |
+| Gateway | `GET /api/v1/admin/sagas?type=&status=&limit=` | admin | `{"sagas": [Saga], "types"}` |
+| Gateway | `GET /api/v1/admin/cache` | admin | Every cache node (up, keys, ring share, hits, misses) and the caching rules |
+| Gateway | `GET /api/v1/admin/cache/locate?key=` | admin | `{"key", "ring_position", "node", "ttl_seconds"}` |
+| Gateway | `GET /api/v1/admin/cache/simulation?keys=&add=&remove=&vnodes=` | admin | Keys moved and balance: the ring vs `hash % N` vs Redis Cluster slots |
+| Gateway | `DELETE /api/v1/admin/cache` | admin | `{"flushed": {"cache-1": true, …}}` |
+| Broker | `POST /v1/sagas`, `GET /v1/sagas`, `GET /v1/sagas/{id}` | the gateway, the operator | Start, list and read sagas |
+| User Management | `POST /internal/v1/sagas/account-deletion/{user_id}/deactivate`, `/reactivate`, `/erase` | the broker only | Saga steps: `{"user_id", "saga_id", "step", "status", "changed", "removed"}` |
+| Map | `POST /internal/v1/sagas/account-deletion/{user_id}/hide`, `/unhide`, `/purge` | the broker only | Saga steps: `{"user_id", "saga_id", "step", "hidden", "changed", "removed"}` |
+| ETL | `GET /status`, `/metrics`, `/v1/runs`, `/v1/runs/{id}`, `/v1/warehouse` | anyone | The schedule, the runs (rows read and loaded, errors), the warehouse's tables |
+| ETL | `POST /v1/runs`, `GET /v1/reports`, `GET /v1/reports/{name}` | `Bearer ETL_ADMIN_TOKEN` | Run now; analytics: `daily-activity`, `players`, `packages`, `raids`, `notifications`, `guilds`, `map` |
+
+Cached GETs answer `X-Cache: HIT | MISS | BYPASS`, `X-Cache-Node` and `Age`. Calls between services that the broker answers from the cache carry `X-Broker-Cache`. The steps of the deletion saga:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant GW as Gateway
+    participant MB as Broker (coordinator)
+    participant UM as User Management
+    participant M as Map
+    C->>GW: DELETE /api/v1/users/me
+    GW->>MB: POST /v1/sagas {type: account-deletion}
+    MB-->>GW: 202 saga (stored in SQLite first)
+    GW-->>C: 202, Location: /api/v1/sagas/{id}
+    MB->>UM: deactivate (sessions revoked)
+    Note over MB: auth:revoked:{user} in the cache: the gateway refuses the user's tokens
+    MB->>M: hide (on nobody's map)
+    MB->>UM: erase (pivot: personal data overwritten)
+    MB->>M: purge (retried until it succeeds)
+    Note over MB,M: a step refused before the pivot is undone in reverse: unhide, reactivate
+```
+
+Run and look:
+
+```sh
+docker compose up -d --wait
+curl -s localhost:8008/cluster                 # the Patroni cluster: leader, synchronous standby, replica
+curl -s localhost:8091/v1/runs?limit=1         # the ETL's last run: rows read from the replicas and loaded
+# Grafana http://localhost:3000: "database cluster, cache, sagas and warehouse (Lab 5)"
+npx newman run postman/lab-5.postman_collection.json \
+  --env-var etl_admin_token=$ETL_ADMIN_TOKEN --env-var broker_admin_token=$BROKER_ADMIN_TOKEN \
+  --env-var map_service_token=$MAP_SERVICE_TOKEN
+docker compose stop <leader>                   # failover: a replica takes over in about 2 s
+```
+
+The `.env` file needs six new values: `REPLICATION_PASSWORD`, `PATRONI_API_PASSWORD`, `ETL_DB_PASSWORD`, `WAREHOUSE_DB_PASSWORD`, `WAREHOUSE_READER_PASSWORD` and `ETL_ADMIN_TOKEN` (see [.env.example](.env.example)). The databases start empty on the new cluster; the old `pgdata` volume of Labs 1–4 is no longer used.
 
 ## Lab 4 — Message broker
 
@@ -1103,6 +1249,7 @@ The common repository stores shared documentation, collaboration files and Git s
 | `services/gateway-service` | [MadalinaDev/gateway-service](https://github.com/MadalinaDev/gateway-service) | Lab 2: repository set up (README, PR template, PR policy, `main`/`dev`); professor and all teammates invited; linked as submodule |
 | `services/service-discovery` | [MadalinaDev/service-discovery](https://github.com/MadalinaDev/service-discovery) | Lab 3: README, PR policy and CI (tests on PRs, image on merge to `main`); professor and all teammates invited; linked as submodule |
 | `services/message-broker` | [MadalinaDev/message-broker](https://github.com/MadalinaDev/message-broker) | Lab 4: README, PR policy and CI (generated gRPC code, lint and tests on PRs, image on merge to `main`); all teammates invited; linked as submodule |
+| `services/etl-service` | [MadalinaDev/etl-service](https://github.com/MadalinaDev/etl-service) | Lab 5: README, PR policy and CI (lint, unit and Postgres integration tests on PRs, image on merge to `main`); professors and all teammates invited; linked as submodule |
 
 Do not add fake submodules or copy private source into public folders. A real submodule needs a remote URL and an existing commit. To add one from the common repo after the service owner has pushed its README:
 

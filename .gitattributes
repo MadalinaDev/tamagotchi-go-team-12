@@ -1,3 +1,7 @@
 * text=auto
 *.sh text eol=lf
 *.sql text eol=lf
+# Lab 5: files copied into the Postgres HA image or mounted into containers keep LF.
+db/ha/* text eol=lf
+db/warehouse/* text eol=lf
+monitoring/** text eol=lf
