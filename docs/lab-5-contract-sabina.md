@@ -15,10 +15,14 @@ Raid and Package Registry (NestJS + Prisma), and how they were verified.
 
 Repositories:
 
-- [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service): #13;
-- [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service): #11.
+- [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service):
+  #13, released to `main` by #14 (`9afe055`);
+- [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service):
+  #11, released by #12 (`3acd367`).
 
-Each README has a "Database failover (Lab 5)" section with the details.
+CI published both `0.6.0` images from those commits, and the submodules point
+to them. Each README has a "Database failover (Lab 5)" section with the
+details.
 
 ## What changed
 
