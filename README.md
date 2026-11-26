@@ -673,7 +673,7 @@ Lab 5 adds the data layer. The team contract is [docs/lab-5-conventions.md](docs
 - **New versions:** the gateway, the message broker, User Management, Map, Monster Raid, Package Registry, Guild and Notification are `0.6.0`. The other images are unchanged.
 - **During a database failover** User Management, Map, Monster Raid, Package Registry, Guild and Notification answer `503 DEPENDENCY_UNAVAILABLE` with `Retry-After: 2` while their database is unreachable (conventions section 3.3), which the broker does not count against the replica.
 
-**New endpoints** (formats in the [contract](docs/lab-5-contract-madalina.md)):
+**New endpoints** (the data formats follow the table):
 
 | Service | Method and path | Who | What |
 | --- | --- | --- | --- |
@@ -689,6 +689,164 @@ Lab 5 adds the data layer. The team contract is [docs/lab-5-conventions.md](docs
 | Map | `POST /internal/v1/sagas/account-deletion/{user_id}/hide`, `/unhide`, `/purge` | the broker only | Saga steps: `{"user_id", "saga_id", "step", "hidden", "changed", "removed"}` |
 | ETL | `GET /status`, `/metrics`, `/v1/runs`, `/v1/runs/{id}`, `/v1/warehouse` | anyone | The schedule, the runs (rows read and loaded, errors), the warehouse's tables |
 | ETL | `POST /v1/runs`, `GET /v1/reports`, `GET /v1/reports/{name}` | `Bearer ETL_ADMIN_TOKEN` | Run now; analytics: `daily-activity`, `players`, `packages`, `raids`, `notifications`, `guilds`, `map` |
+
+**Data formats (DTOs).** Errors keep the team format `{"code", "message", "request_id", "details"}`. Times are UTC, RFC 3339.
+
+<details>
+<summary><b>Saga</b>: <code>DELETE /api/v1/users/me</code> (202), <code>GET /api/v1/sagas/{id}</code>, the items of <code>GET /api/v1/admin/sagas</code> and the broker's <code>/v1/sagas</code></summary>
+
+```json
+{
+  "saga_id": "8eb37a7d-19a4-47d6-b161-a30b1f67fb9c",
+  "type": "account-deletion",
+  "description": "Deletes a user's account: User Management and Map, two databases",
+  "subject": "760675d8-801e-4cb9-be25-3e1941421b49",
+  "status": "completed",
+  "current_step": null,
+  "attempts": 0,
+  "started_by": "760675d8-801e-4cb9-be25-3e1941421b49",
+  "request_id": "5678e68d-bca0-492a-9aa7-65208b79f7d0",
+  "last_error": null,
+  "created_at": "2026-11-26T08:20:28.543Z",
+  "updated_at": "2026-11-26T08:20:28.763Z",
+  "finished_at": "2026-11-26T08:20:28.762Z",
+  "steps": [
+    {
+      "index": 0, "name": "deactivate-account", "service": "user-management", "kind": "compensatable",
+      "status": "succeeded", "attempts": 1, "compensation_attempts": 0,
+      "replica": "user-management-f0d9dc01d366", "last_error": null,
+      "started_at": "2026-11-26T08:20:28.551Z", "finished_at": "2026-11-26T08:20:28.586Z", "compensated_at": null
+    }
+  ]
+}
+```
+
+| Field | Values |
+| --- | --- |
+| `status` | `running`, `compensating`, `completed`, `compensated` (every completed step undone) or `failed` (needs an operator) |
+| `steps[]` | four steps: `deactivate-account`, `hide-from-map`, `erase-account`, `purge-map-data` |
+| `steps[].kind` | `compensatable`, `pivot` or `retriable` |
+| `steps[].status` | `pending`, `running`, `succeeded`, `failed`, `compensating` or `compensated` |
+
+Request to the broker: `POST /v1/sagas` `{"type": "account-deletion"}` from the gateway, or `{"type": "account-deletion", "user_id": "<uuid>"}` from the operator. The answer also carries the headers `Location` and `X-Saga-Created`.
+</details>
+
+<details>
+<summary><b>Saga step</b>: the internal routes of User Management and Map (the broker only)</summary>
+
+Request:
+
+```json
+{"saga_id": "6d1f6c8e-2b7a-4c55-9a51-0f3e2d1c0b9a", "type": "account-deletion",
+ "subject": "3f1c9a52-8a8e-4f0e-9a51-2c4b7d0e6a10", "step": "deactivate-account", "action": "action"}
+```
+
+The request also carries `Idempotency-Key`, `X-Service-Name: message-broker` and `X-Gateway-Secret`. `action` is `"action"` or `"compensation"`, and `subject` must be the user in the path.
+
+User Management's answer (`deactivate`, `reactivate`, `erase`):
+
+```json
+{"user_id": "3f1c9a52-8a8e-4f0e-9a51-2c4b7d0e6a10", "saga_id": "6d1f6c8e-2b7a-4c55-9a51-0f3e2d1c0b9a",
+ "step": "deactivate", "status": "deactivated", "changed": true, "removed": {"refresh_sessions": 2}}
+```
+
+Map's answer (`hide`, `unhide`, `purge`):
+
+```json
+{"user_id": "3f1c9a52-8a8e-4f0e-9a51-2c4b7d0e6a10", "saga_id": "6d1f6c8e-2b7a-4c55-9a51-0f3e2d1c0b9a",
+ "step": "purge", "hidden": true, "changed": true, "removed": {"locations": 1, "proximity_pairs": 2}}
+```
+
+- `changed: false` means the step had already been applied.
+- Refusals are `404 USER_NOT_FOUND`, `409 ACCOUNT_DELETED` or `409 ACCOUNT_ACTIVE`, and `422 SUBJECT_MISMATCH`.
+</details>
+
+<details>
+<summary><b>Cache</b>: <code>GET /api/v1/admin/cache</code>, <code>/locate</code>, <code>/simulation</code>, <code>DELETE /api/v1/admin/cache</code></summary>
+
+`GET /api/v1/admin/cache`:
+
+```json
+{
+  "algorithm": "consistent hashing: MD5 of the key, 64-bit ring, virtual nodes",
+  "vnodes": 160,
+  "nodes": [
+    {"node": "cache-1", "address": "cache-1:6379", "up": true, "skipped": false, "keys": 1,
+     "ring_share_percent": 35.33, "hits": 309, "misses": 50, "hit_ratio": 0.861, "sets": 48, "errors": 0}
+  ],
+  "rules": [{"service": "package-registry", "path": "^/api/v1/packages$", "ttl_seconds": 60, "scope": "user"}]
+}
+```
+
+`GET /api/v1/admin/cache/locate?key=auth:jwks`:
+
+```json
+{"key": "auth:jwks", "ring_position": 13832793385622785418, "node": "cache-2", "ttl_seconds": 109}
+```
+
+`GET /api/v1/admin/cache/simulation?keys=50000&add=cache-4` (abridged):
+
+```json
+{
+  "keys": 50000, "vnodes": 160,
+  "nodes_before": ["cache-1", "cache-2", "cache-3"],
+  "nodes_after": ["cache-1", "cache-2", "cache-3", "cache-4"],
+  "ideal_moved_percent": 25.0,
+  "consistent_hashing": {
+    "moved": {"keys": 12640, "percent": 25.28},
+    "distribution_after": {"cache-4": {"keys": 12640, "percent": 25.28}},
+    "imbalance_percent": 1.93,
+    "imbalance_percent_with_1_point_per_node": 39.34
+  },
+  "modulo": {"moved": {"keys": 37645, "percent": 75.29}, "distribution_after": {}},
+  "redis_cluster_slots": {"moved": {"keys": 12450, "percent": 24.9}, "slots_moved": 4096, "distribution_after": {}}
+}
+```
+
+`DELETE /api/v1/admin/cache`:
+
+```json
+{"flushed": {"cache-1": true, "cache-2": true, "cache-3": true}}
+```
+</details>
+
+<details>
+<summary><b>ETL run and report</b>: <code>GET /v1/runs/{id}</code>, <code>POST /v1/runs</code>, <code>GET /v1/reports/{name}</code> (port 8091)</summary>
+
+Run (`GET /v1/runs` answers `{"runs": [Run]}`):
+
+```json
+{
+  "run_id": 46, "trigger": "schedule", "status": "succeeded",
+  "started_at": "2026-11-26T08:31:47.665Z", "finished_at": "2026-11-26T08:31:48.047Z", "duration_ms": 377,
+  "source": {"user_management_db": "postgres:5433", "map_db": "postgres:5433"},
+  "extracted": {"users": 13, "battles": 2, "notifications": 23},
+  "loaded": {"dim_user": 13, "dim_date": 330, "fact_battle": 2, "fact_map_snapshot": 45},
+  "kept": [],
+  "errors": {}
+}
+```
+
+| Field | Values |
+| --- | --- |
+| `trigger` | `startup`, `schedule` or `manual` |
+| `status` | `running`, `succeeded`, `partial` (an extract failed; the tables in `kept` kept their rows) or `failed` |
+
+Report:
+
+```json
+{
+  "report": "players",
+  "description": "Per player: battles, wins, losses, win rate, raid damage, pets, friends, coins",
+  "rows": [{"user_id": "00000000-0000-4000-8000-000000000001", "username": "alice", "battles": 2, "wins": 0,
+            "losses": 0, "win_rate_percent": null, "raids_joined": 1, "raid_damage": 300, "pets": 2,
+            "friends": 1, "global_coins": 200}],
+  "generated_at": "2026-11-26T08:31:59.282Z"
+}
+```
+
+`GET /v1/warehouse` answers `{"schema": "dw", "tables": {"dim_user": 13}, "dimensions": [], "facts": [], "views": [], "reports": [], "last_successful_run": Run}`.
+</details>
 
 Cached GETs answer `X-Cache: HIT | MISS | BYPASS`, `X-Cache-Node` and `Age`. Calls between services that the broker answers from the cache carry `X-Broker-Cache`. The steps of the deletion saga:
 
