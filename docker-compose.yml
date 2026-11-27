@@ -364,7 +364,9 @@ services:
     # 0.5.0 (Lab 4, docs/lab-4-contract-sava.md): calls User Management,
     # Tamagotchi and Package Registry with gRPC Broker.Call, serves a gRPC
     # ServiceEndpoint on 9081 and publishes battle.finished on the broker.
-    image: ekkusuu/tamagotchi-battle-service:0.5.0
+    # 0.6.0 (Lab 5, docs/lab-5-contract-sava.md): during a database failover it
+    # answers 503 DEPENDENCY_UNAVAILABLE + Retry-After instead of 500.
+    image: ekkusuu/tamagotchi-battle-service:0.6.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     # Lab 3: timeouts, expiry and preparation are claimed in the
@@ -404,7 +406,10 @@ services:
     # 0.5.0 (Lab 4, docs/lab-4-contract-sava.md): calls Package Registry with
     # gRPC Broker.Call, serves a gRPC ServiceEndpoint on 9082 and subscribes to
     # battle.finished (inbox_events + battle_results).
-    image: ekkusuu/tamagotchi-tamagotchi-service:0.5.0
+    # 0.6.0 (Lab 5, docs/lab-5-contract-sava.md): during a database failover it
+    # answers 503 DEPENDENCY_UNAVAILABLE + Retry-After instead of 500, and
+    # Deliver answers UNAVAILABLE so the broker retries the event.
+    image: ekkusuu/tamagotchi-tamagotchi-service:0.6.0
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     # Lab 3: reservations and settlement live in the database, so
