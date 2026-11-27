@@ -353,6 +353,9 @@ services:
       LOG_LEVEL: INFO
     ports:
       - "8080:8080"
+    # The single entry point: back on its own after a crash or a Docker restart, like every
+    # other platform container. Without a policy it stayed down after Docker Desktop restarted.
+    restart: unless-stopped
 
   battle-service:
     <<: *service
