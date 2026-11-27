@@ -34,7 +34,7 @@ This page is the team contract: what changed, and what it means for every servic
 | `warehouse` | `postgres:16.14-alpine` | 5434 → 5432 | The data warehouse |
 | `etl-service` | `madalina060504/tamagotchi-etl-service:0.6.0` | 8091 | The ETL job and its API |
 
-The gateway, message broker, User Management, Map, Monster Raid, Package Registry, Guild and Notification are `0.6.0`. Every other image is unchanged (`0.5.0`).
+The gateway, message broker, User Management, Map, Guild, Notification, Battle and Tamagotchi are `0.6.0`; Monster Raid and Package Registry are `0.6.1`. Every other image is unchanged (`0.5.0`).
 
 ## 3. The database cluster: replication and failover (grade 5)
 
@@ -66,9 +66,11 @@ For a few seconds (up to about 24 s after a crash) its queries fail. A service s
 
 User Management and Map (`0.6.0`) do both. Prisma's connection errors (`P1001`, `P1002`, `P1008`, `P1017`, `P2024`, and closed connections) become `503 DEPENDENCY_UNAVAILABLE` with `Retry-After: 2`.
 
-Monster Raid and Package Registry (`0.6.0`) do the same ([lab-5-contract-sabina.md](lab-5-contract-sabina.md)). They also set Prisma's `connect_timeout=2` and `pool_timeout=3`, under the 5 s task timeout. With Prisma's defaults (5 s and 10 s), a connection opened during a planned switchover waited until the task timeout, and the request answered `504 TASK_TIMEOUT`, which the broker counts.
+Monster Raid and Package Registry (`0.6.1`) do the same ([lab-5-contract-sabina.md](lab-5-contract-sabina.md)). They also set Prisma's `connect_timeout=1` and `pool_timeout=1`, so the `503` comes within the broker's 2 s attempt. `0.6.0` had 2 s and 3 s: through the broker, requests made right after the leader went away timed out, and a crash or even a planned stop got all four replicas evicted.
 
 Guild and Notification (`0.6.0`) do the same with pgx ([lab-5-contract-vica.md](lab-5-contract-vica.md)): no connection, a cut connection, SQLSTATE class `08`, `57P01`–`57P03` and `25006` (a write to a just-demoted leader) become `503 DEPENDENCY_UNAVAILABLE` with `Retry-After: 2`. On a leader crash their replicas stayed in rotation; with `0.5.0` the broker evicted all four.
+
+Battle and Tamagotchi (`0.6.0`) do the same with pgx ([lab-5-contract-sava.md](lab-5-contract-sava.md)), and add `connect_timeout=1` to the connection string: while no leader exists the router accepts a new connection but nothing answers, and without a limit the request outlived the broker's 2 s attempt, which the broker counts. Tamagotchi's `Deliver` answers `UNAVAILABLE`, so the broker retries the event.
 
 ### 3.4 Operating the cluster
 
@@ -292,8 +294,9 @@ The gateway and the broker get `CACHE_NODES` from the same anchor. Their tuning 
 ## 11. What each owner does
 
 - **Mădălina:** everything above. That covers the gateway, the broker, User Management, Map, the ETL service, the database image, Compose, monitoring, Postman and the diagrams.
-- **Sabina:** Monster Raid and Package Registry `0.6.0` follow the recommendation below ([lab-5-contract-sabina.md](lab-5-contract-sabina.md)); their schemas keep the columns of section 5.1.
+- **Sabina:** Monster Raid and Package Registry `0.6.1` follow the recommendation below ([lab-5-contract-sabina.md](lab-5-contract-sabina.md)); their schemas keep the columns of section 5.1.
 - **Vica:** Guild and Notification `0.6.0` follow the recommendation below ([lab-5-contract-vica.md](lab-5-contract-vica.md)); their schemas keep the columns of section 5.1.
+- **Sava:** Battle and Tamagotchi `0.6.0` follow the recommendation below ([lab-5-contract-sava.md](lab-5-contract-sava.md)); their schemas keep the columns of section 5.1.
 - **Everyone else:** no change is required, and the images stay `0.5.0`.
   - *Recommended:* answer `503 DEPENDENCY_UNAVAILABLE` with `Retry-After` when the database can't be reached, so a database failover doesn't get your replicas evicted (section 7).
   - *When you change your schema:* keep the columns in section 5.1 stable, or tell Mădălina.

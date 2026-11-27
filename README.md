@@ -649,7 +649,7 @@ Private repos admit the professor(s), not teammates, as required by the lab. Pee
 
 ## Lab 5 — Sharding and replication
 
-Lab 5 adds the data layer. The team contract is [docs/lab-5-conventions.md](docs/lab-5-conventions.md). The endpoints, data formats and verification of Mădălina's parts are in [docs/lab-5-contract-madalina.md](docs/lab-5-contract-madalina.md), Sabina's in [docs/lab-5-contract-sabina.md](docs/lab-5-contract-sabina.md), Vica's in [docs/lab-5-contract-vica.md](docs/lab-5-contract-vica.md), and the walk-through for the demo is [docs/lab-5-demo.md](docs/lab-5-demo.md).
+Lab 5 adds the data layer. The team contract is [docs/lab-5-conventions.md](docs/lab-5-conventions.md). The endpoints, data formats and verification of Mădălina's parts are in [docs/lab-5-contract-madalina.md](docs/lab-5-contract-madalina.md), Sabina's in [docs/lab-5-contract-sabina.md](docs/lab-5-contract-sabina.md), Vica's in [docs/lab-5-contract-vica.md](docs/lab-5-contract-vica.md), Sava's in [docs/lab-5-contract-sava.md](docs/lab-5-contract-sava.md), and the walk-through for the demo is [docs/lab-5-demo.md](docs/lab-5-demo.md).
 
 | Grade | What | Where |
 | --- | --- | --- |
@@ -670,8 +670,37 @@ Lab 5 adds the data layer. The team contract is [docs/lab-5-conventions.md](docs
 - **The cache:** `cache-1`, `cache-2`, `cache-3` (Redis 7.4).
 - **The warehouse:** `warehouse` (Postgres 16, port 5434).
 - **The ETL service:** `etl-service` (`madalina060504/tamagotchi-etl-service:0.6.0`, port 8091).
-- **New versions:** the gateway, the message broker, User Management, Map, Monster Raid, Package Registry, Guild and Notification are `0.6.0`. The other images are unchanged.
-- **During a database failover** User Management, Map, Monster Raid, Package Registry, Guild and Notification answer `503 DEPENDENCY_UNAVAILABLE` with `Retry-After: 2` while their database is unreachable (conventions section 3.3), which the broker does not count against the replica.
+- **New versions:** the gateway, the message broker, User Management, Map, Guild, Notification, Battle and Tamagotchi are `0.6.0`; Monster Raid and Package Registry are `0.6.1`. The other images are unchanged.
+- **During a database failover** User Management, Map, Monster Raid, Package Registry, Guild, Notification, Battle and Tamagotchi answer `503 DEPENDENCY_UNAVAILABLE` with `Retry-After: 2` while their database is unreachable (conventions section 3.3), which the broker does not count against the replica.
+
+**Docker Hub images** (everything the stack runs). Every image is public and pinned to a version, and each one's `latest` is the same build.
+
+| Service | Owner | Image | Source |
+| --- | --- | --- | --- |
+| API Gateway | Mădălina | [`madalina060504/tamagotchi-gateway-service:0.6.0`](https://hub.docker.com/r/madalina060504/tamagotchi-gateway-service) | [MadalinaDev/gateway-service](https://github.com/MadalinaDev/gateway-service) |
+| Message Broker | Mădălina | [`madalina060504/tamagotchi-message-broker:0.6.0`](https://hub.docker.com/r/madalina060504/tamagotchi-message-broker) | [MadalinaDev/message-broker](https://github.com/MadalinaDev/message-broker) |
+| Service Discovery | Mădălina | [`madalina060504/tamagotchi-service-discovery:0.5.0`](https://hub.docker.com/r/madalina060504/tamagotchi-service-discovery) | [MadalinaDev/service-discovery](https://github.com/MadalinaDev/service-discovery) |
+| User Management | Mădălina | [`madalina060504/tamagotchi-user-management-service:0.6.0`](https://hub.docker.com/r/madalina060504/tamagotchi-user-management-service) | [MadalinaDev/user-management-service](https://github.com/MadalinaDev/user-management-service) |
+| Map | Mădălina | [`madalina060504/tamagotchi-map-service:0.6.0`](https://hub.docker.com/r/madalina060504/tamagotchi-map-service) | [MadalinaDev/map-service](https://github.com/MadalinaDev/map-service) |
+| ETL service | Mădălina | [`madalina060504/tamagotchi-etl-service:0.6.0`](https://hub.docker.com/r/madalina060504/tamagotchi-etl-service) | [MadalinaDev/etl-service](https://github.com/MadalinaDev/etl-service) |
+| Database nodes `pg-1..3` (Postgres + PostGIS + Patroni) | Mădălina | [`madalina060504/tamagotchi-postgres-ha:0.6.0`](https://hub.docker.com/r/madalina060504/tamagotchi-postgres-ha) | this repository, [db/ha](db/ha) |
+| Battle | Sava | [`ekkusuu/tamagotchi-battle-service:0.6.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-battle-service) | [Ekkusuu/battle-service](https://github.com/Ekkusuu/battle-service) |
+| Tamagotchi | Sava | [`ekkusuu/tamagotchi-tamagotchi-service:0.6.0`](https://hub.docker.com/r/ekkusuu/tamagotchi-tamagotchi-service) | [Ekkusuu/tamagotchi-service](https://github.com/Ekkusuu/tamagotchi-service) |
+| Guild | Vica | [`nikvnln/tamagotchi-guild-service:0.6.0`](https://hub.docker.com/r/nikvnln/tamagotchi-guild-service) | [vikanicologlo/guild-service](https://github.com/vikanicologlo/guild-service) |
+| Notification | Vica | [`nikvnln/tamagotchi-notification-service:0.6.0`](https://hub.docker.com/r/nikvnln/tamagotchi-notification-service) | [vikanicologlo/notification-service](https://github.com/vikanicologlo/notification-service) |
+| Monster Raid | Sabina | [`sabinapopescu/tamagotchi-monster-raid-service:0.6.1`](https://hub.docker.com/r/sabinapopescu/tamagotchi-monster-raid-service) | [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service) |
+| Package Registry | Sabina | [`sabinapopescu/tamagotchi-package-registry-service:0.6.1`](https://hub.docker.com/r/sabinapopescu/tamagotchi-package-registry-service) | [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service) |
+
+Infrastructure, public upstream images:
+- [`haproxy:3.0.5-alpine`](https://hub.docker.com/_/haproxy): the database router `postgres`;
+- [`quay.io/coreos/etcd:v3.5.17`](https://quay.io/repository/coreos/etcd);
+- [`redis:7.4.1-alpine`](https://hub.docker.com/_/redis): the cache;
+- [`postgres:16.14-alpine`](https://hub.docker.com/_/postgres): the warehouse;
+- [`prom/prometheus:v2.55.1`](https://hub.docker.com/r/prom/prometheus);
+- [`grafana/loki:3.3.2`](https://hub.docker.com/r/grafana/loki);
+- [`grafana/alloy:v1.5.1`](https://hub.docker.com/r/grafana/alloy);
+- [`grafana/grafana:11.4.0`](https://hub.docker.com/r/grafana/grafana);
+- [`alpine/socat:1.8.1.3`](https://hub.docker.com/r/alpine/socat): `guild-ws`.
 
 **New endpoints** (the data formats follow the table):
 
@@ -1119,7 +1148,7 @@ All eight services are published on Docker Hub and started together by one Compo
 
 ### Docker Hub images
 
-All images are public and pinned to an explicit version tag (never `latest`).
+All images are public and pinned to an explicit version tag (never `latest`). These are the Lab 1 releases; the images the stack runs today are listed in [Lab 5 — Sharding and replication](#lab-5--sharding-and-replication), under **Docker Hub images**.
 
 | Service | Owner | Image | Port | Database | Lab 1 contract notes | Private repository |
 | --- | --- | --- | --- | --- | --- | --- |
