@@ -1,8 +1,10 @@
 # Lab 5 — Sabina's Monster Raid and Package Registry
 
-This page covers **tamagotchi-monster-raid-service:0.6.0** and
-**tamagotchi-package-registry-service:0.6.0**, the Lab 5 versions of Monster
+This page covers **tamagotchi-monster-raid-service:0.6.1** and
+**tamagotchi-package-registry-service:0.6.1**, the Lab 5 versions of Monster
 Raid and Package Registry (NestJS + Prisma), and how they were verified.
+`0.6.1` fixes `0.6.0`'s Prisma timeouts, which were too long for the broker
+(see [Inside the broker's 2 s attempt](#inside-the-brokers-2-s-attempt)).
 
 - They follow the recommendation for every owner in the
   [Lab 5 conventions](lab-5-conventions.md), section 11: during a database
@@ -16,22 +18,22 @@ Raid and Package Registry (NestJS + Prisma), and how they were verified.
 Repositories:
 
 - [sabinapopescu/monster-raid-service](https://github.com/sabinapopescu/monster-raid-service):
-  #13, released to `main` by #14 (`9afe055`);
+  `0.6.0` is #13, released to `main` by #14 (`9afe055`); `0.6.1` is #15;
 - [sabinapopescu/package-registry-service](https://github.com/sabinapopescu/package-registry-service):
-  #11, released by #12 (`3acd367`).
+  `0.6.0` is #11, released by #12 (`3acd367`); `0.6.1` is #13.
 
-CI published both `0.6.0` images from those commits, and the submodules point
-to them. Each README has a "Database failover (Lab 5)" section with the
+CI publishes the images from the release commits on `main`, and the
+submodules point to them. Each README has a "Database failover (Lab 5)" section with the
 details.
 
 ## What changed
 
 | | Monster Raid | Package Registry |
 | --- | --- | --- |
-| Image | `sabinapopescu/tamagotchi-monster-raid-service:0.6.0` | `sabinapopescu/tamagotchi-package-registry-service:0.6.0` |
+| Image | `sabinapopescu/tamagotchi-monster-raid-service:0.6.1` | `sabinapopescu/tamagotchi-package-registry-service:0.6.1` |
 | Database unreachable | `503 DEPENDENCY_UNAVAILABLE`, `Retry-After: 2` (was `500 INTERNAL_ERROR`) | `503 DEPENDENCY_UNAVAILABLE`, `Retry-After: 2` (was `500 INTERNAL`) |
-| Prisma URL | adds `connect_timeout=2&pool_timeout=3` | adds `connect_timeout=2&pool_timeout=3` unless `DATABASE_URL` sets them |
-| `LISTEN` connection (live HP between replicas) | reconnects at least every 2 s (was up to 10 s); connect timeout 2 s | — |
+| Prisma URL | adds `connect_timeout=1&pool_timeout=1` | adds `connect_timeout=1&pool_timeout=1` unless `DATABASE_URL` sets them |
+| `LISTEN` connection (live HP between replicas) | reconnects at least every 2 s (was up to 10 s); connect timeout 1 s | — |
 | Log event | `db.unavailable` (WARN) | `db.unavailable` (WARN) |
 | Routes, DTOs, schema, ports, environment | unchanged | unchanged |
 
@@ -63,18 +65,25 @@ own port, so the broker gets the same `503` in the `CallReply` and applies the
 section 7 rule to it. `Deliver` already answered `UNAVAILABLE` to a database
 outage, and the broker redelivers the event.
 
-## No `504` in a planned switchover
+## Inside the broker's 2 s attempt
 
-With Prisma's defaults, a connection opened while the leader was handing over
-waited 5 s (`connect_timeout`), the same as the task timeout. The request
-answered `504 TASK_TIMEOUT`, and the broker counts a `504` against the
-replica. Both services now set `connect_timeout=2` and `pool_timeout=3`
-(seconds), under the 5 s task timeout. A connection that can't be had fails as
-`P1001` or `P2024`, which answers `503`.
+The broker waits 2 s for each attempt (`ATTEMPT_TIMEOUT_MS`) and counts a
+timeout against the replica like a `500` (section 7). The `503` therefore
+has to come sooner:
 
-User Management and Map use Prisma too. Unless their URLs set these
-timeouts, they may also answer a `504` in a planned switchover, as `0.5.0` of
-these two services did in the measurements below.
+- **`0.6.1`** sets Prisma's `connect_timeout=1` and `pool_timeout=1`
+  (seconds; Prisma takes only whole seconds). A connection that can't be had
+  fails within 1 s as `P1001` or `P2024`, which answers `503`.
+- **`0.6.0`** had 2 s and 3 s, chosen against the 5 s task timeout. Requests
+  made right after the leader went away waited past the attempt. Through the
+  broker, a leader crash, and even a planned stop, got all four replicas
+  evicted (measurements below).
+- **Prisma's defaults**, 5 s and 10 s, even reached the task timeout. A
+  connection opened during a planned switchover waited 5 s, and the request
+  answered `504 TASK_TIMEOUT`.
+
+User Management and Map use Prisma too. Unless their URLs set shorter
+timeouts, the broker may time them out the same way.
 
 ## Retrying
 
@@ -131,6 +140,38 @@ answers afterwards.
   stop.
 - After a crash, Monster Raid's `LISTEN` connection was back 1–3 s after the
   database (`0.5.0`: 6–8 s).
+
+**Through the broker (`0.6.1`).** The probe above called the services
+directly, so it couldn't see the broker's 2 s attempt. A second scratch stack
+ran this repository's compose from `main`:
+
+- the cluster, the cache, Service Discovery and the broker;
+- two replicas each of Monster Raid and Package Registry, with
+  `USE_MOCKS=true` for Monster Raid's dev route.
+
+A probe in the same network sent four requests every 250 ms, overlapping:
+
+- a raid read and a raid creation, over the broker's `/internal` path (gRPC to
+  the replica);
+- a Package Registry read and a registration, over the broker's queue path,
+  as the gateway does.
+
+The leader was killed or stopped 10 s in, on a fresh stack each time:
+
+| | `0.6.0` crash | `0.6.1` crash, 3 runs | `0.6.0` stop | `0.6.1` stop, 2 runs |
+| --- | --- | --- | --- | --- |
+| Broker timeouts (Monster Raid / Package Registry) | 7 / 18 | 0 / 0 | 9 / 9 | 0 / 0 during the switchover |
+| Breakers opened, replicas evicted | 4, all 4 | 0 | 4, all 4 | 0 |
+| Requests failed for | 35 s, mostly `503 NO_REPLICA` | about 24 s (no leader), all `503 DEPENDENCY_UNAVAILABLE` | 35 s | 2–3 s, all `503 DEPENDENCY_UNAVAILABLE` |
+| Acknowledged writes lost | 0 of 200 | 0 of 864 | 0 of 216 | 0 of 905 |
+
+- Each attempt answered within about 1 s. A read the broker rerouted to the
+  other replica took about 2 s in all. One crash run sent one request at a
+  time per route, with the same result.
+- In the first `0.6.1` stop run, the whole Docker VM stalled about 40 s after
+  the switchover; the broker's own log paused for 2 s too. 6 requests timed
+  out at the broker, and 2 writes per service answered `504` although they had
+  committed. No breaker opened, and it didn't happen in the second run.
 
 ## Not changed
 
