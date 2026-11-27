@@ -670,7 +670,7 @@ Lab 5 adds the data layer. The team contract is [docs/lab-5-conventions.md](docs
 - **The cache:** `cache-1`, `cache-2`, `cache-3` (Redis 7.4).
 - **The warehouse:** `warehouse` (Postgres 16, port 5434).
 - **The ETL service:** `etl-service` (`madalina060504/tamagotchi-etl-service:0.6.0`, port 8091).
-- **New versions:** the gateway, the message broker, User Management, Map, Monster Raid, Package Registry, Guild and Notification are `0.6.0`. The other images are unchanged.
+- **New versions:** the gateway, the message broker, User Management, Map, Guild and Notification are `0.6.0`; Monster Raid and Package Registry are `0.6.1`. The other images are unchanged.
 - **During a database failover** User Management, Map, Monster Raid, Package Registry, Guild and Notification answer `503 DEPENDENCY_UNAVAILABLE` with `Retry-After: 2` while their database is unreachable (conventions section 3.3), which the broker does not count against the replica.
 
 **New endpoints** (the data formats follow the table):

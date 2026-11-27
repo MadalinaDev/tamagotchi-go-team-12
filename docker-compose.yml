@@ -626,7 +626,10 @@ services:
     # 0.6.0 (Lab 5, docs/lab-5-contract-sabina.md): during a database failover it
     # answers 503 DEPENDENCY_UNAVAILABLE + Retry-After instead of 500 or 504, and
     # its LISTEN connection follows the new leader within 2 s.
-    image: sabinapopescu/tamagotchi-monster-raid-service:0.6.0
+    # 0.6.1: that 503 comes within the broker's 2 s attempt (Prisma connect and
+    # pool timeouts of 1 s), so a database failover no longer gets the replicas
+    # evicted.
+    image: sabinapopescu/tamagotchi-monster-raid-service:0.6.1
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     deploy:
@@ -671,7 +674,10 @@ services:
     # transactional outbox.
     # 0.6.0 (Lab 5, docs/lab-5-contract-sabina.md): during a database failover it
     # answers 503 DEPENDENCY_UNAVAILABLE + Retry-After instead of 500 or 504.
-    image: sabinapopescu/tamagotchi-package-registry-service:0.6.0
+    # 0.6.1: that 503 comes within the broker's 2 s attempt (Prisma connect and
+    # pool timeouts of 1 s), so a database failover no longer gets the replicas
+    # evicted.
+    image: sabinapopescu/tamagotchi-package-registry-service:0.6.1
     # Published for amd64 only; runs emulated on Apple Silicon.
     platform: linux/amd64
     deploy:
